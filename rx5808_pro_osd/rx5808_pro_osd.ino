@@ -58,18 +58,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 /* ***************** INCLUDES *******************/
 
 //#define membug 
-//#define FORCEINIT  // You should never use this unless you know what you are doing 
-
 
 // AVR Includes
 #include <FastSerial.h> // better steam
-//#include "BetterStream.h"
 
-//#include <AP_Common.h>
-//#include <AP_Math.h>
-//#include <math.h>
-//#include <inttypes.h>
-//#include <avr/pgmspace.h>
 // Get the common arduino functions
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -99,16 +91,51 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 // switches
 #define KEY_A 0 // RX
 #define KEY_B 1 // TX
-#define KEY_UP 1
-#define KEY_DOWN 2
+#define KEY_UP 2
+#define KEY_DOWN 1
 #define KEY_MID 3
+
+#define RSSIMAX 75 // 75% threshold, when channel is printed in spectrum
+#define STATE_SEEK_FOUND 0
+#define STATE_SEEK 1
+#define STATE_SCAN 2
+#define STATE_MANUAL 3
+
+#define START_STATE STATE_SEEK
+#define MAX_STATE STATE_MANUAL
+
+#define KEY_DEBOUNCE 10
+#define CHANNEL_BAND_SIZE 8
+#define CHANNEL_MIN_INDEX 0
+#define CHANNEL_MAX_INDEX 31
+
+#define CHANNEL_MAX 31
+#define CHANNEL_MIN 0
+
+// Screen settings (use smaller NTSC size)
+#define SCEEEN_X_MAX 30
+#define SCREEN_Y_MAX 13
+
+
+// Menu settings
+#define MENU_MODE_SELECTION_X 6
+#define MENU_MODE_SELECTION_Y 2
+#define MENU_MODE_SELECTION_HEADER 3
+#define MENU_MODE_SELECTION_ENTRY 4
+// band scanner gemetry
+#define BAND_SCANNER_SPECTRUM_X_MIN 2
+#define BAND_SCANNER_SPRCTRUM_Y_MAX 30
+#define BAND_SCANNER_SPECTRUM_Y_MIN 12
+#define BAND_SCANNER_SPRCTRUM_Y_MAX 5
 
 
 // Objects and Serial definitions
 FastSerialPort0(Serial); // just for character update
 OSD osd; //OSD object 
-
 //SimpleTimer  mavlinkTimer;
+
+uint8_t state = START_STATE;
+
 
 
 /* **********************************************/
@@ -118,47 +145,125 @@ void setup()
 {
     unplugSlaves();
     osd.init();
-
-    osd.setPanel(1,1);
+    osd.setPanel(1,10);
     osd.openPanel();
     //osd.printf("%i",freeMem()); 
-    osd.printf_P(PSTR("\x20\x20\x20\x20\x20\x20\xba\xbb\xbc\xbd\xbe|\x20\x20\x20\x20\x20\x20\xca\xcb\xcc\xcd\xce|ArduCAM OSD v2.2"));    
+    //osd.printf_P(PSTR("\x20\x20\x20\x20\x20\x20\xba\xbb\xbc\xbd\xbe|\x20\x20\x20\x20\x20\x20\xca\xcb\xcc\xcd\xce|ArduCAM OSD v2.2"));    
     osd.closePanel();
 
-
+    //screen_mode_selection();  
+    screen_band_scanner();
 //    osd.clear();
 //    mavlinkTimer.Enable();
 
 } // END of setup();
 
 
-
-/* ***********************************************/
-/* ***************** MAIN LOOP *******************/
-
-// Mother of all happenings, The loop()
-// As simple as possible.
+    int8_t menu=1;
+/************************************************/
+/*                 MAIN LOOP                    */
+/************************************************/
 void loop() 
 {
-    uint8_t key_pressed = get_key();
-    osd.setPanel(3,5);
-    osd.openPanel();
-    osd.printf("Key: %i",key_pressed);
 
-    //osd.printf("%i",freeMem()); 
-    //osd.printf_P(PSTR("\x20\x20\x20\x20\x20\x20\xba\xbb\xbc\xbd\xbe|\x20\x20\x20\x20\x20\x20\xca\xcb\xcc\xcd\xce|ArduCAM OSD v2.2"));    
-    osd.closePanel();    
+    uint8_t key_pressed = get_key();
+    
     if(key_pressed == KEY_MID)
     {
         uploadFont(); // will not return
     }    
+    if(key_pressed == KEY_UP)
+    {
+        menu++;
+        if(menu > 4)
+        {
+            menu=1;
+        }
+    }   
+    if(key_pressed == KEY_DOWN)
+    {
+        menu--;
+        if(menu < 1)
+        {
+            menu=4;
+        }        
+    }     
+    #if 0
+    set_cursor
+        (
+        MENU_MODE_SELECTION_X+1, 
+        MENU_MODE_SELECTION_Y + MENU_MODE_SELECTION_HEADER,
+        MENU_MODE_SELECTION_ENTRY,
+        menu
+        );
+    #endif
     delay(100); // debounce
+    
 }
 
 
-//************************************************
-//*              SUB ROUTINES 
-//************************************************
+/************************************************/
+/*              SUB ROUTINES                    */
+/************************************************/
+
+void osd_print (uint8_t x, uint8_t y, char string[30])
+{
+    osd.setPanel(x-1,y-1);  
+    osd.openPanel();
+    osd.printf("%s",string); 
+    osd.closePanel(); 
+}
+
+
+/*******************/
+/*   MODE SCREEN   */
+/*******************/
+void screen_mode_selection(void)
+{
+    uint8_t y=MENU_MODE_SELECTION_Y;
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02 MODE SELECTION \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  AUTO SEARCH   \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  BAND SCANNER  \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  MANUEL MODE   \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  SETUP         \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+}
+/*******************/
+/*   BAND SCANNER   */
+/*******************/
+void screen_band_scanner(void)
+{
+
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       BAND SCANNER      \x02");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
+}
+
+
+
+// cursor handling for menue
+void set_cursor(uint8_t x_offset, uint8_t y_offset, uint8_t entry, uint8_t pos)
+{
+    uint8_t y=0;
+    for(y=1;
+        y<=entry;
+        y++)
+        {
+            uint8_t y_pos=y-1;
+            if(pos == y) // set arrow
+            {
+                osd_print(x_offset,y_pos+y_offset,"\x80");
+            }
+            else // clear arrow
+            {
+                 osd_print(x_offset,y_pos+y_offset,"  ");           
+            }
+        }
+}
 
 uint8_t get_key (void)
 {   
