@@ -1,5 +1,6 @@
 
 #include <FastSerial.h>
+//#include "BetterStream.h"
 
 #include "ArduCam_Max7456.h"
 // Get the common arduino functions
@@ -9,8 +10,6 @@
 	#include "wiring.h"
 #endif
 #include "Spi.h"
-//#include <EEPROM.h>
-//#include "OSD_Config.h"
 
 volatile int x;
 volatile int font_count;
