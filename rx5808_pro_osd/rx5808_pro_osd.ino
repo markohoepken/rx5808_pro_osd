@@ -124,7 +124,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define MENU_MODE_SELECTION_ENTRY 4
 // band scanner gemetry
 #define BAND_SCANNER_SPECTRUM_X_MIN 2
-#define BAND_SCANNER_SPRCTRUM_Y_MAX 30
+#define BAND_SCANNER_SPRCTRUM_X_MAX 27
 #define BAND_SCANNER_SPECTRUM_Y_MIN 12
 #define BAND_SCANNER_SPRCTRUM_Y_MAX 5
 
@@ -134,12 +134,31 @@ FastSerialPort0(Serial); // just for character update
 OSD osd; //OSD object 
 //SimpleTimer  mavlinkTimer;
 
+// global variables
+
 uint8_t state = START_STATE;
 
+/*
+ Array to keep values for spectrum print.
+ A special coding is used, since one character has two colums.
+ The spectrum on screen has 27 characters with 54 colums (2x27).
+ The spectrum can have maxium 6 characters hight.
+ For finer vertical resulution each colum character can have
+ 4 different hight values 0..3
+ Coding in array:
+ Lower nible  : left column
+ Higher nible : right colum
+ Example: value 0x13
+ colum left = 1
+ colum right= 3
+ Organisation of array: 0:0 = bottom left corner
+*/
+
+uint8_t spectrum_display[BAND_SCANNER_SPRCTRUM_X_MAX][6];
 
 
-/* **********************************************/
-/* ***************** SETUP() *******************/
+/**********************************************/
+/****************** SETUP() *******************/
 
 void setup() 
 {
@@ -150,7 +169,9 @@ void setup()
     //osd.printf("%i",freeMem()); 
     //osd.printf_P(PSTR("\x20\x20\x20\x20\x20\x20\xba\xbb\xbc\xbd\xbe|\x20\x20\x20\x20\x20\x20\xca\xcb\xcc\xcd\xce|ArduCAM OSD v2.2"));    
     osd.closePanel();
-
+    
+    // setup spectrum screen array
+    spectrum_init();
     //screen_mode_selection();  
     screen_band_scanner();
 //    osd.clear();
@@ -206,6 +227,7 @@ void loop()
 /*              SUB ROUTINES                    */
 /************************************************/
 
+
 void osd_print (uint8_t x, uint8_t y, char string[30])
 {
     osd.setPanel(x-1,y-1);  
@@ -233,6 +255,114 @@ void screen_mode_selection(void)
 /*******************/
 /*   BAND SCANNER   */
 /*******************/
+void spectrum_init(void)
+{
+    // clear array spectrum
+    // fill all with ff to get cente dot.
+    // botton line getes black bar (0x00).
+    uint8_t  x=0;
+    uint8_t  y=0;
+    for (x=0; x<BAND_SCANNER_SPRCTRUM_X_MAX;x++)
+    {
+        for (y=0; y<6;y++) 
+        {
+            if(y==0) // fill lowest line with black bar
+            {
+                spectrum_display[x][y]=0x00; // black bar = 00
+            }
+            else
+            {
+                spectrum_display[x][y]=0xff; // center dot coded as 255
+            }            
+        }
+    }
+}
+
+// calculate correct character for two bars depending on value
+char spectrum_get_char(uint8_t value)
+{
+    // Note: This can be done by formular, but case it easier to adapter...
+    // can be optimized
+
+    uint8_t ret=0;
+    switch(value)
+    {
+        case 0x00: 
+            ret = 0x90;
+            break;
+        case 0x10: 
+            ret = 0x91;
+            break;
+        case 0x20: 
+            ret = 0x92;
+            break;            
+        case 0x30: 
+            ret = 0x93;
+            break;            
+        case 0x01: 
+            ret = 0x94;
+            break;            
+        case 0x11: 
+            ret = 0x95;
+            break;            
+        case 0x21: 
+            ret = 0x96;
+            break;            
+        case 0x31: 
+            ret = 0x97;
+            break;            
+        case 0x02: 
+            ret = 0x98;
+            break;            
+        case 0x12: 
+            ret = 0x99;
+            break;            
+        case 0x22: 
+            ret = 0x9a;
+            break;            
+        case 0x32: 
+            ret = 0x9b;
+            break;            
+        case 0x03: 
+            ret = 0x9c;
+            break;            
+        case 0x13: 
+            ret = 0x9d;
+            break;            
+        case 0x23: 
+            ret = 0x9e;
+            break;            
+        case 0x33: 
+            ret = 0x9f;
+            break;            
+        default:
+            ret = 0x8e; // center dot            
+    }    
+    return(ret);
+}
+
+void spectrum_dump (void)
+{
+    // for fast dump, each line is printed at once.
+    // the strings will be created from the spetrum array
+    char string[BAND_SCANNER_SPRCTRUM_X_MAX+1];
+    string[BAND_SCANNER_SPRCTRUM_X_MAX]=0; // string termination
+    uint8_t  x=0;
+    uint8_t  y=0;
+    for (y=0; y<6;y++)     
+    {
+        for (x=0; x<BAND_SCANNER_SPRCTRUM_X_MAX;x++)
+        {
+            string[x]=spectrum_get_char(spectrum_display[x][y]);
+        }
+        // dump string
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3-y,string);
+
+    }
+   
+}
+
+// Band scanner screen
 void screen_band_scanner(void)
 {
 
@@ -241,6 +371,9 @@ void screen_band_scanner(void)
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
+
+    spectrum_dump();
+    
 }
 
 
