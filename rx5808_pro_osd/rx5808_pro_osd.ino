@@ -101,7 +101,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 // key debounce delay in ms
 // NOTE: good values are in the range of 100-200ms
 // shorter values will make it more reactive, but may lead to double trigger
-#define KEY_DEBOUNCE 200
+#define KEY_DEBOUNCE 100
 
 // Set you TV format (PAL = Europe = 50Hz, NTSC = INT = 60Hz)
 //#define TV_FORMAT NTSC
@@ -123,7 +123,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define STATE_SCAN 2
 #define STATE_MANUAL 3
 #define STATE_SWITCH 4
-#define STATE_SAVE 5
+#define STATE_SETUP 5
 #define STATE_RSSI_SETUP 6
 
 #define START_STATE STATE_SEEK
@@ -163,6 +163,12 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define MENU_MODE_SELECTION_Y 2
 #define MENU_MODE_SELECTION_HEADER 3
 #define MENU_MODE_SELECTION_ENTRY 4
+#define WAIT_MODE_ENTRY 20
+
+#define MENU_SETUP_X 6
+#define MENU_SETUP_Y 2
+#define MENU_SETUP_HEADER 3
+#define MENU_SETUP_ENTRY 5
 // band scanner gemetry
 #define BAND_SCANNER_SPECTRUM_X_MIN 2
 #define BAND_SCANNER_SPECTRUM_X_MAX 27
@@ -277,7 +283,7 @@ uint8_t spectrum_display[BAND_SCANNER_SPECTRUM_X_MAX][6];
 
 
 /**********************************************/
-/****************** SETUP() *******************/
+/*                   SETUP()                  */
 /**********************************************/
 void setup() 
 {
@@ -399,10 +405,9 @@ void loop()
     if (get_key() == KEY_MID) // key pressed ?
     {      
         osd_print_debug(1,1,"switch_count",switch_count);
-        if (switch_count > KEY_DEBOUNCE) // Button debounce
+        if (switch_count > WAIT_MODE_ENTRY) // Button debounce
         {      
             // Show Mode Screen
-            #define MAX_MENU 4
             uint8_t menu_id=0;
             if(state==STATE_SEEK_FOUND)
             {
@@ -418,6 +423,7 @@ void loop()
             Any Mode will refresh screen
             If not MODE changes in 2 seconds, it uses last selected mode
             */
+            
             do
             {
                 screen_mode_selection();
@@ -441,9 +447,9 @@ void loop()
                         menu=3;  
                         state=STATE_MANUAL;
                     break;
-                    case 4: // Save settings 
+                    case 3: // Save settings 
                         menu=4;                      
-                        state=STATE_SAVE;
+                        state=STATE_SETUP;
                     break;
                 } // end switch    
                 set_cursor // set cursor to show active menu entry
@@ -469,6 +475,10 @@ void loop()
                 while(--in_menu_time_out && (get_key() == KEY_NONE)) // wait for next mode or time out
                 {
                     delay(200); // timeout delay                
+                    if(get_key() == KEY_UP) // fast exit
+                    {
+                        in_menu_time_out=0;
+                    }
                 }    
                 if(in_menu_time_out==0) 
                 {
@@ -480,9 +490,9 @@ void loop()
                     /*********************/
                     /*   Menu handler   */
                     /*********************/
-                    if (menu_id < MAX_MENU)
+                    if (menu_id < MENU_MODE_SELECTION_ENTRY-1)
                     {
-                        menu_id++; // next state
+                        menu_id++; // next menu entry
                     } 
                     else 
                     {
@@ -556,38 +566,8 @@ void loop()
                 update_frequency_view=1;
                 force_seek=1;
             break;
-            case STATE_SAVE:
-                screen_save();             
-                EEPROM.write(EEPROM_ADR_STATE,state_last_used);
-                EEPROM.write(EEPROM_ADR_TUNE,channelIndex);             
-                switch (state_last_used) 
-                {    
-                    case STATE_SCAN: // Band Scanner
-//                        TV.printPGM(50,5+1*MENU_Y_SIZE,  PSTR("Scanner")); 
-                    break;
-                    case STATE_MANUAL: // manual mode 
-//                    TV.printPGM(50,5+1*MENU_Y_SIZE,  PSTR("Manual"));                    
-                    break;
-                    case STATE_SEEK: // seek mode
-//                      TV.printPGM(50,5+1*MENU_Y_SIZE,  PSTR("Search"));                     
-                    break;
-              
-                }
-//              TV.printPGM(10, 5+2*MENU_Y_SIZE, PSTR("Band:")); 
-                // print band
-
-//              TV.printPGM(10, 5+3*MENU_Y_SIZE, PSTR("Chan:"));   
-                uint8_t active_channel = channelIndex%CHANNEL_BAND_SIZE+1; // get channel inside band
-//              TV.printPGM(10, 5+4*MENU_Y_SIZE, PSTR("FREQ:     GHz"));      
-
-//              TV.printPGM(10, 5+5*MENU_Y_SIZE, PSTR("--- SAVED ---"));
-//              TV.printPGM(10, 14+5*MENU_Y_SIZE,     PSTR("Hold MODE to enter RSSI setup"));
-                delay(1000);
-                delay(1000);                
-//              if (digitalRead(buttonMode) == LOW) // to RSSI setup
-
-//                   state=STATE_RSSI_SETUP;
-            // selection by inverted box            
+            case STATE_SETUP:
+                screen_setup();       
             break;
         } // end switch
         last_state=state;
@@ -784,6 +764,69 @@ void loop()
         // update index after channel change
         channelIndex = pgm_read_byte_near(channelList + channel);            
     }
+    else if (state == STATE_SETUP) 
+    {
+        uint8_t menu_id=0; 
+        while(state == STATE_SETUP)
+        {
+            if(get_key() == KEY_MID)
+            {
+                // Menu navigation
+                if (menu_id < MENU_SETUP_ENTRY-1)
+                {
+                    menu_id++; // next menu entry
+                } 
+                else 
+                {
+                    menu_id = 0; 
+                }                 
+
+                set_cursor // set cursor to show active menu entry
+                    (
+                        MENU_SETUP_X+1, 
+                        MENU_SETUP_Y + MENU_SETUP_HEADER,
+                        MENU_SETUP_ENTRY,
+                        menu_id+1
+                    );           
+                while(get_key() == KEY_MID)
+                {
+                    delay(KEY_DEBOUNCE);
+                }
+            }
+            // Menu action
+            if(get_key() == KEY_UP)
+            {
+                switch (menu_id) 
+                {    
+                    case 0: // EXIT
+                        state=state_last_used;
+                    break;
+                    case 1: // SAVE SETTINGS
+                        EEPROM.write(EEPROM_ADR_STATE,state_last_used);
+                        EEPROM.write(EEPROM_ADR_TUNE,channelIndex);  
+                        osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "Settings saved..");
+                        delay(2000);
+                        state=state_last_used;
+                        // ADD CODE
+                    break;
+                    case 2: // VIDEO MODE
+                        //state=STATE_MANUAL;
+                    break;
+                    case 3: // RSSI CALIBRATE
+                        state=STATE_RSSI_SETUP;
+                    break;
+                    case 4: // FONT UPLAD
+                        uploadFont();                        
+                    break;                    
+                } // end switch                
+            }
+            
+        }
+        if (get_key() == KEY_MID) 
+        {
+            
+        }
+    }
 
     /*****************************/
     /*   General house keeping   */
@@ -826,25 +869,32 @@ void loop()
     //delay(100); // debounce
     
     #if 1
-    if(freq <= 5945)
-    {        
-        spectrum_add_column (6, freq, rssi);  
-        rssi=random(0, 100);         
-//        rssi+=3;
-        freq+=5;
-        if(rssi>100)
-        {
-            rssi=10;
+    // Dummy Testcode
+    if (state == STATE_SCAN)
+    {    
+        
+        if(freq <= 5945)
+        {        
+            spectrum_add_column (6, freq, rssi);  
+            rssi=random(0, 100);         
+    //        rssi+=3;
+            freq+=5;
+            if(rssi>100)
+            {
+                rssi=10;
+                }
+            osd_print_debug(4,3,"freq",freq);
+            osd_print_debug(15,3,"rssi",rssi);
         }
-        osd_print_debug(4,3,"freq",freq);
-        osd_print_debug(15,3,"rssi",rssi);
+        else
+        {
+            freq=5645;
+            }
+    
+        spectrum_dump(); 
+        delay(10);        
     }
-    else
-    {
-        freq=5645;
-    }
-
-    spectrum_dump();  
+        
     #endif
 }
 
@@ -1248,15 +1298,19 @@ void screen_manual(void)
 }
 
 // Band scanner screen
-void screen_save(void)
+void screen_setup(void)
 {
+    uint8_t y=MENU_SETUP_Y;
     osd.clear();
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       SETUP      \x02");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
-    spectrum_dump();    
+    osd_print(MENU_SETUP_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print(MENU_SETUP_X,y++,"\x02 SETUP (UP=SAVE) \x02");
+    osd_print(MENU_SETUP_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
+    osd_print(MENU_SETUP_X,y++,"\x02  EXIT           \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  SAVE SETTINGS  \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  VIDEO : NTSC   \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  RSSI CALIBRATE \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  FONT UPLOAD    \x02");
+    osd_print(MENU_SETUP_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");   
 }
 
 
@@ -1343,6 +1397,7 @@ void unplugSlaves(){
 
 void uploadFont()
 {
+    
     uint16_t byte_count = 0;
     byte bit_count;
     byte ascii_binary[0x08];
@@ -1354,13 +1409,13 @@ void uploadFont()
     osd.clear();
     osd.setPanel(1,1);
     osd.openPanel();
-    osd.printf_P(PSTR("Update CharSet")); 
+    osd.printf_P(PSTR("Waiting for Character Update")); 
     osd.closePanel();
     delay(1000);
 
     #define TELEMETRY_SPEED  57600 
     Serial.begin(TELEMETRY_SPEED);    
-    //Serial.printf_P(PSTR("Ready for Font\n"));
+    Serial.println(""); // CR
     Serial.println("Ready for Font upload");
 
     while(font_count < 255) { 
