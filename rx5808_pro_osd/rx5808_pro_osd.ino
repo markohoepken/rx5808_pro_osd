@@ -124,7 +124,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define MENU_MODE_SELECTION_ENTRY 4
 // band scanner gemetry
 #define BAND_SCANNER_SPECTRUM_X_MIN 2
-#define BAND_SCANNER_SPRCTRUM_X_MAX 27
+#define BAND_SCANNER_SPECTRUM_X_MAX 27
 #define BAND_SCANNER_SPECTRUM_Y_MIN 12
 //#define BAND_SCANNER_SPRCTRUM_Y_MAX 5
 // band scanner scaling
@@ -159,7 +159,7 @@ uint8_t state = START_STATE;
  Organisation of array: 0:0 = bottom left corner
 */
 
-uint8_t spectrum_display[BAND_SCANNER_SPRCTRUM_X_MAX][6];
+uint8_t spectrum_display[BAND_SCANNER_SPECTRUM_X_MAX][6];
 
 
 /**********************************************/
@@ -201,8 +201,48 @@ void setup()
     spectrum_display[5][2]=0x30;
     spectrum_display[5][3]=0x10;    
     
+
+*/  
+    #if 0
+    // simple test code 
+    // adds columns direct to spectrum buffer
+    spectrum_display[4][0]=0x33;
+    spectrum_display[4][1]=0x13;
+    spectrum_display[4][2]=0x03;
+    spectrum_display[4][3]=0x03; 
+    
+    spectrum_display[5][0]=0x33;
+    spectrum_display[5][1]=0x32;
+    spectrum_display[5][2]=0x30;
+    spectrum_display[5][3]=0x10;    
+    
+    spectrum_display[6][0]=0x33;
+    spectrum_display[6][1]=0x33;
+    spectrum_display[6][2]=0x31;
+    spectrum_display[6][3]=0x20;    
+    
     spectrum_dump();  
-*/    
+    #endif
+    
+    #if 0
+    // add single colums to buffer
+    // test with split column
+    // one since they are to close
+    spectrum_add_column (6, 5845, 55); // left colum   // upper 1 
+    spectrum_add_column (6, 5847, 88); // right column  // upper 0
+                 column
+    //two colums
+    spectrum_add_column (6, 5710, 77); // left colum   // upper 1 
+    spectrum_add_column (6, 5718, 22); // right column  // upper 0
+                 column
+                 column
+    // corners   column
+    spectrum_add_column (6, 5645, 100); // left
+    spectrum_add_column (6, 5800, 100); // middle
+    spectrum_add_column (6, 5945, 100); // righ
+    
+    spectrum_dump();  
+    #endif
 //    osd.clear();
 //    mavlinkTimer.Enable();
 
@@ -250,27 +290,29 @@ void loop()
         menu
         );
     #endif
-    delay(100); // debounce
+    delay(10); // debounce
     
-    if(freq < 5945)
+    #if 1
+    if(freq <= 5945)
     {        
-        spectrum_add_spectrum (6, freq, rssi);   
-        rssi+=3;
+        spectrum_add_column (6, freq, rssi);  
+        rssi=random(0, 100);         
+//        rssi+=3;
         freq+=5;
         if(rssi>100)
         {
             rssi=10;
         }
-        osd_print_debug(15,3,"freq",freq);
-        osd_print_debug(15,4,"rssi",rssi);
+        osd_print_debug(4,3,"freq",freq);
+        osd_print_debug(15,3,"rssi",rssi);
     }
     else
     {
         freq=5645;
     }
-    
+
     spectrum_dump();  
-    
+    #endif
 }
 
 
@@ -290,10 +332,16 @@ void osd_print_debug (uint8_t x, uint8_t y, char string[30], uint16_t value)
 {
     osd.setPanel(x-1,y-1);  
     osd.openPanel();
-    osd.printf("%s : %i",string,value); 
+    osd.printf("%s :%i   ",string,value); 
     osd.closePanel(); 
 }
-
+void osd_print_debug_x (uint8_t x, uint8_t y, char string[30], uint16_t value)
+{
+    osd.setPanel(x-1,y-1);  
+    osd.openPanel();
+    osd.printf("%s :0x%x   ",string,value); 
+    osd.closePanel(); 
+}
 
 /*******************/
 /*   MODE SCREEN   */
@@ -316,18 +364,30 @@ void screen_mode_selection(void)
 
 // add one spectrum line in spectrum buffer
 // this function does all the colum calcuation with rounding
-void spectrum_add_spectrum (uint8_t scale, uint16_t frequence, uint8_t rssi)
+void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi)
 {
-    // X POSTION HANDLING
+    if(rssi>100)
+    {
+        rssi=100;
+    }
+
+    // X POSTION HANDLING (range of array 0..26 = 27 positions)
     uint8_t upper=0; // marker for upper or lower sub colum in charcter
     // calculate column position of 54 columns
+    
     // Note: calculation done on runtime, since preprocessor seems to have issues with forumlars
-    uint16_t frequency_delta=(frequence-BAND_SCANNER_FREQ_MIN);
-    uint16_t frequency_per_char=(BAND_SCANNER_FREQ_MAX-BAND_SCANNER_FREQ_MIN)/(BAND_SCANNER_SPRCTRUM_X_MAX*2);
-    uint8_t x_pos_54= frequency_delta / frequency_per_char;;
+    // simple interger with 10x factor and /10 at end
+    #define INTEGER_GAIN 100
+    uint16_t frequency_delta=(frequency-BAND_SCANNER_FREQ_MIN); // no rouding issue
+    uint16_t frequency_per_char=((BAND_SCANNER_FREQ_MAX-BAND_SCANNER_FREQ_MIN)*INTEGER_GAIN)/((BAND_SCANNER_SPECTRUM_X_MAX-1)*2);
+    // special rounding is required, since lowest in on left side, highest on right sight of character
+    #define ROUND_CORRECTION 2 // stretches band a little
+    uint8_t x_pos_54= (frequency_delta*(INTEGER_GAIN+ROUND_CORRECTION)) / frequency_per_char;
     // find right column of 27 characters
-    uint8_t x=(x_pos_54/2)+1;
-    // check for upper or lower nibble
+    uint8_t x=((x_pos_54)/2); // final down scale to single character
+    //osd_print_debug(1,2,"x_pos_54",x_pos_54);
+    //osd_print_debug(1,3,"x",x);    
+    // check for upper or lower nibble for each character
     if (x_pos_54 % 2)
     {
         upper=0;
@@ -336,7 +396,7 @@ void spectrum_add_spectrum (uint8_t scale, uint16_t frequence, uint8_t rssi)
     {
         upper=1;
     }
-    osd_print_debug(1,1,"xpos",x);
+
 
     // Y SCALING
     //
@@ -346,22 +406,24 @@ void spectrum_add_spectrum (uint8_t scale, uint16_t frequence, uint8_t rssi)
     uint8_t y_max_100=0; // keeps last y with 100%
     uint8_t y_fill=0; // marker to fill top of comum with 0
     // set all 100% sub bars
-    
+#if 0    
     osd_print_debug(1,2,"y_step",y_step);
     osd_print_debug(1,3,"y_step_fractional",y_step_fractional);
     osd_print_debug(1,4,"xpos",x);    
+#endif  
     uint8_t value=0;
+  
     for(y=1; y<=scale;y++) // 1...scale
     {
         value=spectrum_display[x][y-1];
-        if(value=0xff) // remove filling center marker
+        if(value==0xff) // remove filling center marker
         {
             value=0;
         }
         if(y*y_step < rssi)
         {
             // sub colum to 100%
-            osd_print_debug(15,1,"value_in",value); 
+            //osd_print_debug_x(15,1,"val_in",value); 
             y_max_100=y;
             // set value
             if(upper){
@@ -378,7 +440,7 @@ void spectrum_add_spectrum (uint8_t scale, uint16_t frequence, uint8_t rssi)
                 // set 100%
                 value=value|0x03;                
             }
-            osd_print_debug(15,2,"value_out",value); 
+            //osd_print_debug_x(15,2,"val_out",value); 
         }
         else
         {
@@ -432,7 +494,7 @@ void spectrum_init(void)
     // botton line getes black bar (0x00).
     uint8_t  x=0;
     uint8_t  y=0;
-    for (x=0; x<BAND_SCANNER_SPRCTRUM_X_MAX;x++)
+    for (x=0; x<BAND_SCANNER_SPECTRUM_X_MAX;x++)
     {
         for (y=0; y<6;y++) 
         {
@@ -515,13 +577,13 @@ void spectrum_dump (void)
 {
     // for fast dump, each line is printed at once.
     // the strings will be created from the spetrum array
-    char string[BAND_SCANNER_SPRCTRUM_X_MAX+1];
-    string[BAND_SCANNER_SPRCTRUM_X_MAX]=0; // string termination
+    char string[BAND_SCANNER_SPECTRUM_X_MAX+1];
+    string[BAND_SCANNER_SPECTRUM_X_MAX]=0; // string termination
     uint8_t  x=0;
     uint8_t  y=0;
     for (y=0; y<6;y++)     
     {
-        for (x=0; x<BAND_SCANNER_SPRCTRUM_X_MAX;x++)
+        for (x=0; x<BAND_SCANNER_SPECTRUM_X_MAX;x++)
         {
             string[x]=spectrum_get_char(spectrum_display[x][y]);
         }
