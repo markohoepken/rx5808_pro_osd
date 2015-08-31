@@ -230,13 +230,12 @@ void setup()
     // one since they are to close
     spectrum_add_column (6, 5845, 55); // left colum   // upper 1 
     spectrum_add_column (6, 5847, 88); // right column  // upper 0
-                 column
+                 
     //two colums
     spectrum_add_column (6, 5710, 77); // left colum   // upper 1 
     spectrum_add_column (6, 5718, 22); // right column  // upper 0
-                 column
-                 column
-    // corners   column
+                
+    // corners   
     spectrum_add_column (6, 5645, 100); // left
     spectrum_add_column (6, 5800, 100); // middle
     spectrum_add_column (6, 5945, 100); // righ
@@ -289,7 +288,7 @@ void loop()
         menu
         );
     #endif
-    delay(30); // debounce
+    delay(100); // debounce
     
     #if 1
     if(freq <= 5945)
