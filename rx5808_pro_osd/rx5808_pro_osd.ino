@@ -126,7 +126,12 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define BAND_SCANNER_SPECTRUM_X_MIN 2
 #define BAND_SCANNER_SPRCTRUM_X_MAX 27
 #define BAND_SCANNER_SPECTRUM_Y_MIN 12
-#define BAND_SCANNER_SPRCTRUM_Y_MAX 5
+//#define BAND_SCANNER_SPRCTRUM_Y_MAX 5
+// band scanner scaling
+#define BAND_SCANNER_FREQ_MIN 5645
+#define BAND_SCANNER_FREQ_MAX 5945 
+#define BAND_SCANNER_RSSI_MAX 100
+#define BAND_SCANNER_SUB_BAR 3 // a character can have values 0..3
 
 
 // Objects and Serial definitions
@@ -174,6 +179,30 @@ void setup()
     spectrum_init();
     //screen_mode_selection();  
     screen_band_scanner();
+/*    
+    spectrum_add_spectrum (6, 5800, 50);
+    spectrum_add_spectrum (6, 5810, 15);
+    spectrum_add_spectrum (6, 5815, 20);
+    spectrum_add_spectrum (6, 5820, 25);
+    spectrum_add_spectrum (6, 5825, 30);
+    spectrum_add_spectrum (6, 5830, 35);
+
+    
+    spectrum_add_spectrum (6, 5820, 80);    
+    spectrum_add_spectrum (6, 5645, 20);
+    spectrum_add_spectrum (6, 5900, 100);
+
+    spectrum_add_spectrum (6, 5645, 66);       
+    spectrum_add_spectrum (6, 5945, 66);   
+    
+    
+    spectrum_display[5][0]=0x33;
+    spectrum_display[5][1]=0x32;
+    spectrum_display[5][2]=0x30;
+    spectrum_display[5][3]=0x10;    
+    
+    spectrum_dump();  
+*/    
 //    osd.clear();
 //    mavlinkTimer.Enable();
 
@@ -184,6 +213,9 @@ void setup()
 /************************************************/
 /*                 MAIN LOOP                    */
 /************************************************/
+uint16_t freq=5645;
+uint8_t rssi=10;
+
 void loop() 
 {
 
@@ -220,6 +252,25 @@ void loop()
     #endif
     delay(100); // debounce
     
+    if(freq < 5945)
+    {        
+        spectrum_add_spectrum (6, freq, rssi);   
+        rssi+=3;
+        freq+=5;
+        if(rssi>100)
+        {
+            rssi=10;
+        }
+        osd_print_debug(15,3,"freq",freq);
+        osd_print_debug(15,4,"rssi",rssi);
+    }
+    else
+    {
+        freq=5645;
+    }
+    
+    spectrum_dump();  
+    
 }
 
 
@@ -233,6 +284,13 @@ void osd_print (uint8_t x, uint8_t y, char string[30])
     osd.setPanel(x-1,y-1);  
     osd.openPanel();
     osd.printf("%s",string); 
+    osd.closePanel(); 
+}
+void osd_print_debug (uint8_t x, uint8_t y, char string[30], uint16_t value)
+{
+    osd.setPanel(x-1,y-1);  
+    osd.openPanel();
+    osd.printf("%s : %i",string,value); 
     osd.closePanel(); 
 }
 
@@ -255,6 +313,118 @@ void screen_mode_selection(void)
 /*******************/
 /*   BAND SCANNER   */
 /*******************/
+
+// add one spectrum line in spectrum buffer
+// this function does all the colum calcuation with rounding
+void spectrum_add_spectrum (uint8_t scale, uint16_t frequence, uint8_t rssi)
+{
+    // X POSTION HANDLING
+    uint8_t upper=0; // marker for upper or lower sub colum in charcter
+    // calculate column position of 54 columns
+    // Note: calculation done on runtime, since preprocessor seems to have issues with forumlars
+    uint16_t frequency_delta=(frequence-BAND_SCANNER_FREQ_MIN);
+    uint16_t frequency_per_char=(BAND_SCANNER_FREQ_MAX-BAND_SCANNER_FREQ_MIN)/(BAND_SCANNER_SPRCTRUM_X_MAX*2);
+    uint8_t x_pos_54= frequency_delta / frequency_per_char;;
+    // find right column of 27 characters
+    uint8_t x=(x_pos_54/2)+1;
+    // check for upper or lower nibble
+    if (x_pos_54 % 2)
+    {
+        upper=0;
+    }
+    else
+    {
+        upper=1;
+    }
+    osd_print_debug(1,1,"xpos",x);
+
+    // Y SCALING
+    //
+    uint8_t y=0;
+    uint8_t y_step= BAND_SCANNER_RSSI_MAX/scale;
+    uint8_t y_step_fractional= BAND_SCANNER_RSSI_MAX/scale/BAND_SCANNER_SUB_BAR;
+    uint8_t y_max_100=0; // keeps last y with 100%
+    uint8_t y_fill=0; // marker to fill top of comum with 0
+    // set all 100% sub bars
+    
+    osd_print_debug(1,2,"y_step",y_step);
+    osd_print_debug(1,3,"y_step_fractional",y_step_fractional);
+    osd_print_debug(1,4,"xpos",x);    
+    uint8_t value=0;
+    for(y=1; y<=scale;y++) // 1...scale
+    {
+        value=spectrum_display[x][y-1];
+        if(value=0xff) // remove filling center marker
+        {
+            value=0;
+        }
+        if(y*y_step < rssi)
+        {
+            // sub colum to 100%
+            osd_print_debug(15,1,"value_in",value); 
+            y_max_100=y;
+            // set value
+            if(upper){
+                // mask value to be keep other sub column
+                value=value&0x0f;
+                
+                // set 100%
+                value=value|0x30;
+            }
+            else
+            {
+                // mask value to be keept
+                value=value&0xf0;
+                // set 100%
+                value=value|0x03;                
+            }
+            osd_print_debug(15,2,"value_out",value); 
+        }
+        else
+        {
+            if(y_fill==0)
+            {
+                // handle fractional values on top of bar and beyond
+                uint8_t rssi_fraction= rssi-(y_max_100*y_step);
+                uint8_t colum_value= rssi_fraction/ y_step_fractional;
+                // set value
+                if(upper){
+                    // mask value to be keep other sub column
+                    value=value&0x0f;
+                    // set 100%
+                    value=value|(colum_value <<4);
+                }
+                else
+                {
+                    // mask value to be keept
+                    value=value&0xf0;
+                    // set 100%
+                    value=value|colum_value;                
+                }           
+                y_fill=1;
+            }
+            else
+            {
+                // fill area on top with "0"
+                if(upper){
+                    // mask value to be keep other sub column
+                    value=value&0x0f;
+                    // set 0%
+                    value=value|0x00;
+                }
+                else
+                {
+                    // mask value to be keept
+                    value=value&0xf0;
+                    // set 0%
+                    value=value|0x00;                
+                }
+            }
+        }
+        spectrum_display[x][y-1]=value;        
+    }    
+}
+
 void spectrum_init(void)
 {
     // clear array spectrum
@@ -357,9 +527,7 @@ void spectrum_dump (void)
         }
         // dump string
         osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3-y,string);
-
     }
-   
 }
 
 // Band scanner screen
@@ -371,9 +539,7 @@ void screen_band_scanner(void)
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
-
-    spectrum_dump();
-    
+    spectrum_dump();    
 }
 
 
