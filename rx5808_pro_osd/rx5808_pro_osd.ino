@@ -258,7 +258,6 @@ uint8_t rssi=10;
 
 void loop() 
 {
-
     uint8_t key_pressed = get_key();
     
     if(key_pressed == KEY_MID)
@@ -290,7 +289,7 @@ void loop()
         menu
         );
     #endif
-    delay(10); // debounce
+    delay(30); // debounce
     
     #if 1
     if(freq <= 5945)
@@ -396,8 +395,18 @@ void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi)
     {
         upper=1;
     }
-
-
+    // set arrow at current frequency
+    char arrow_string[]="                           "; // clear line
+    if(upper){
+        arrow_string[x]=0x81; // insert arrow
+    }
+    else
+    {
+        arrow_string[x]=0x82; // insert arrow
+    }
+    // print arrow line
+    osd_print (BAND_SCANNER_SPECTRUM_X_MIN, BAND_SCANNER_SPECTRUM_Y_MIN,arrow_string );
+    
     // Y SCALING
     //
     uint8_t y=0;
