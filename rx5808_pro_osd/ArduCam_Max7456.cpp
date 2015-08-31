@@ -27,7 +27,7 @@ void OSD::init()
   pinMode(MAX7456_VSYNC, INPUT);
   digitalWrite(MAX7456_VSYNC,HIGH); //enabling pull-up resistor
 
-  detectMode();
+  //detectMode();
 
   digitalWrite(MAX7456_SELECT,LOW);
   //read black level register

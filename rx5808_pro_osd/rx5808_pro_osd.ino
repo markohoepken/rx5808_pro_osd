@@ -101,7 +101,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 // key debounce delay in ms
 // NOTE: good values are in the range of 100-200ms
 // shorter values will make it more reactive, but may lead to double trigger
-#define KEY_DEBOUNCE 100
+#define KEY_DEBOUNCE 20 // debounce in ms
 
 // Set you TV format (PAL = Europe = 50Hz, NTSC = INT = 60Hz)
 //#define TV_FORMAT NTSC
@@ -125,6 +125,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define STATE_SWITCH 4
 #define STATE_SETUP 5
 #define STATE_RSSI_SETUP 6
+#define STATE_MODE_SELECT 7
 
 #define START_STATE STATE_SEEK
 #define MAX_STATE STATE_MANUAL
@@ -152,6 +153,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define EEPROM_ADR_RSSI_MIN_H 3
 #define EEPROM_ADR_RSSI_MAX_L 4
 #define EEPROM_ADR_RSSI_MAX_H 5
+#define EEPROM_VIDEO_MODE 6
 
 // Screen settings (use smaller NTSC size)
 #define SCEEEN_X_MAX 30
@@ -162,8 +164,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define MENU_MODE_SELECTION_X 6
 #define MENU_MODE_SELECTION_Y 2
 #define MENU_MODE_SELECTION_HEADER 3
-#define MENU_MODE_SELECTION_ENTRY 4
-#define WAIT_MODE_ENTRY 20
+#define MENU_MODE_SELECTION_ENTRY 5
+#define WAIT_MODE_ENTRY 5
 
 #define MENU_SETUP_X 6
 #define MENU_SETUP_Y 2
@@ -261,6 +263,8 @@ uint16_t rssi_setup_min=0;
 uint16_t rssi_setup_max=0;
 uint16_t rssi_seek_found=0;
 uint16_t rssi_setup_run=0;
+uint8_t menu_first_entry=0;
+uint8_t video_mode=PAL;
 
 
 
@@ -287,9 +291,6 @@ uint8_t spectrum_display[BAND_SCANNER_SPECTRUM_X_MAX][6];
 /**********************************************/
 void setup() 
 {
-    unplugSlaves();
-    osd.init();
-
    // use values only of EEprom is not 255 = unsaved
     uint8_t eeprom_check = EEPROM.read(EEPROM_ADR_STATE);
     if(eeprom_check == 255) // unused
@@ -302,6 +303,7 @@ void setup()
         // save 16 bit
         EEPROM.write(EEPROM_ADR_RSSI_MAX_L,lowByte(RSSI_MAX_VAL));
         EEPROM.write(EEPROM_ADR_RSSI_MAX_H,highByte(RSSI_MAX_VAL));
+        EEPROM.write(EEPROM_VIDEO_MODE,video_mode);
     }
     // debug reset EEPROM
     //EEPROM.write(EEPROM_ADR_STATE,255);    
@@ -311,7 +313,12 @@ void setup()
     channelIndex=EEPROM.read(EEPROM_ADR_TUNE);
     rssi_min=((EEPROM.read(EEPROM_ADR_RSSI_MIN_H)<<8) | (EEPROM.read(EEPROM_ADR_RSSI_MIN_L)));
     rssi_max=((EEPROM.read(EEPROM_ADR_RSSI_MAX_H)<<8) | (EEPROM.read(EEPROM_ADR_RSSI_MAX_L)));
+    video_mode=EEPROM.read(EEPROM_VIDEO_MODE);
     force_menu_redraw=1;
+ 
+    unplugSlaves();
+    osd.setMode(video_mode);
+    osd.init();
  
     // setup spectrum screen array
     spectrum_init();
@@ -398,119 +405,24 @@ void loop()
 #endif
     
 
-    /*******************/
-    /*   Mode Select   */
-    /*******************/
-    state_last_used=state; // save save settings
-    if (get_key() == KEY_MID) // key pressed ?
+    /************************/
+    /*   Mode Select Enty   */
+    /************************/
+    // Special handler you must press the mode some time to get in
+    if ((state != STATE_SETUP) && get_key() == KEY_MID) // key pressed ?
     {      
         osd_print_debug(1,1,"switch_count",switch_count);
-        if (switch_count > WAIT_MODE_ENTRY) // Button debounce
-        {      
-            // Show Mode Screen
-            uint8_t menu_id=0;
-            if(state==STATE_SEEK_FOUND)
-            {
-                state=STATE_SEEK;
-            }
-            uint8_t in_menu=1;
-            uint8_t in_menu_time_out=10; // 10x 200ms = 2 seconds
-            uint8_t entry=1;
-            /*
-            Enter Mode menu
-            Show current mode
-            Change mode by MODE key
-            Any Mode will refresh screen
-            If not MODE changes in 2 seconds, it uses last selected mode
-            */
-            
-            do
-            {
-                screen_mode_selection();
-                       
-                // set menu to current mode
-                uint8_t menu=0;
-                switch (menu_id) 
-                {    
-                    case 0: // auto search
-                        menu=1;                      
-                        state=STATE_SEEK;
-                        force_seek=1;
-                        seek_found=0;
-                    break;
-                    case 1: // Band Scanner  
-                        menu=2;  
-                        state=STATE_SCAN;
-                        scan_start=1;
-                    break;
-                    case 2: // manual mode 
-                        menu=3;  
-                        state=STATE_MANUAL;
-                    break;
-                    case 3: // Save settings 
-                        menu=4;                      
-                        state=STATE_SETUP;
-                    break;
-                } // end switch    
-                set_cursor // set cursor to show active menu entry
-                    (
-                        MENU_MODE_SELECTION_X+1, 
-                        MENU_MODE_SELECTION_Y + MENU_MODE_SELECTION_HEADER,
-                        MENU_MODE_SELECTION_ENTRY,
-                        menu
-                    );   
-                if(entry) // wait until key is released ONLY for first entry
-                {                    
-                    while(get_key() == KEY_MID);
-                    entry=0;
-                }
-                // new key resets timeout counter
-                if(get_key() == KEY_MID)
-                {                    
-                    // wait for MODE release
-                    in_menu_time_out=20;                   
-                }
-                delay(200); // debounce
-                //key_pressed = get_key();                 
-                while(--in_menu_time_out && (get_key() == KEY_NONE)) // wait for next mode or time out
-                {
-                    delay(200); // timeout delay                
-                    if(get_key() == KEY_UP) // fast exit
-                    {
-                        in_menu_time_out=0;
-                    }
-                }    
-                if(in_menu_time_out==0) 
-                {
-                    in_menu=0; // EXIT
-                }
-                else // no timeout, must be keypressed
-                {
-                    in_menu_time_out=10;                
-                    /*********************/
-                    /*   Menu handler   */
-                    /*********************/
-                    if (menu_id < MENU_MODE_SELECTION_ENTRY-1)
-                    {
-                        menu_id++; // next menu entry
-                    } 
-                    else 
-                    {
-                        menu_id = 0; 
-                    }                                  
-    
-                }
-            } while(in_menu);
-            last_state=255; // force redraw of current screen
-            switch_count = 0;              
+        if (switch_count > WAIT_MODE_ENTRY)
+        {   
+            state=STATE_MODE_SELECT;
         } 
         else 
-        { // Button debounce
+        {
             switch_count++;         
         }      
     } 
     else // key pressed
-    { // reset debounce      
+    { // reset hold detection     
         switch_count = 0;    
     }
     /***************************************/
@@ -569,6 +481,9 @@ void loop()
             case STATE_SETUP:
                 screen_setup();       
             break;
+            case STATE_MODE_SELECT:
+                screen_mode_selection();       
+            break;            
         } // end switch
         last_state=state;
     }
@@ -585,8 +500,7 @@ void loop()
         {
             // handling of keys
             if( get_key() == KEY_UP )        // channel UP
-            {
-                delay(KEY_DEBOUNCE); // debounce            
+            {         
                 channelIndex++;
                 if (channelIndex > CHANNEL_MAX_INDEX) 
                 {  
@@ -596,7 +510,6 @@ void loop()
             }
             if( get_key() == KEY_DOWN) // channel DOWN
             {
-                delay(KEY_DEBOUNCE); // debounce 
                 channelIndex--;
                 if (channelIndex > CHANNEL_MAX_INDEX) // negative overflow
                 {  
@@ -667,8 +580,7 @@ void loop()
             { // seek was successful            
 //                TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE LOCK"));        
                 if (get_key() == KEY_UP) // restart seek if key pressed
-                {
-                    delay(KEY_DEBOUNCE); // debounce                 
+                {              
                     force_seek=1;
                     seek_found=0; 
 //                    TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE SEEK"));        
@@ -754,8 +666,7 @@ void loop()
         }    
         // new scan possible by press scan
         if (get_key() == KEY_UP) // force new full new scan
-        {
-            delay(KEY_DEBOUNCE); // debounce         
+        {   
             last_state=255; // force redraw by fake state change ;-)
             channel=CHANNEL_MIN;
             writePos=SCANNER_LIST_X_POS; // reset channel list
@@ -764,10 +675,18 @@ void loop()
         // update index after channel change
         channelIndex = pgm_read_byte_near(channelList + channel);            
     }
-    else if (state == STATE_SETUP) 
+    else if (state == STATE_MODE_SELECT) 
     {
         uint8_t menu_id=0; 
-        while(state == STATE_SETUP)
+        set_cursor // set cursor to show active menu entry
+            (
+                MENU_MODE_SELECTION_X+1, 
+                MENU_MODE_SELECTION_Y + MENU_MODE_SELECTION_HEADER,
+                MENU_MODE_SELECTION_ENTRY,
+                menu_id+1
+            );   
+ 
+        while(state == STATE_MODE_SELECT)
         {
             if(get_key() == KEY_MID)
             {
@@ -780,7 +699,77 @@ void loop()
                 {
                     menu_id = 0; 
                 }                 
-
+                set_cursor // set cursor to show active menu entry
+                    (
+                        MENU_MODE_SELECTION_X+1, 
+                        MENU_MODE_SELECTION_Y + MENU_MODE_SELECTION_HEADER,
+                        MENU_MODE_SELECTION_ENTRY,
+                        menu_id+1
+                    );   
+                while(get_key() == KEY_MID)
+                {
+                }
+            }
+            // Menu action
+            if(get_key() == KEY_UP)
+            {
+                switch (menu_id) 
+                {    
+                    case 0: // EXIT
+                        state=STATE_SETUP;
+                    break;
+                    case 1: // AUTO SEARCH
+                        state=STATE_SEEK;
+                        state_last_used=state;
+                        force_seek=1;
+                        seek_found=0;
+                    break;
+                    case 2: // BAND SCANNER
+                        state=STATE_SCAN;
+                        state_last_used=state;                        
+                        scan_start=1;                    
+                    break;
+                    case 3: // MANUEL MODE
+                        state=STATE_MANUAL;   
+                        state_last_used=state;                        
+                    break;
+                    case 4: // SETUP
+                        menu_first_entry=1;
+                        state=STATE_SETUP;                                       
+                    break;                    
+                } // end switch                
+            }
+            
+        }
+    }    
+    else if (state == STATE_SETUP) 
+    {
+        uint8_t menu_id=0; 
+        set_cursor // set cursor to show active menu entry
+            (
+                MENU_SETUP_X+1, 
+                MENU_SETUP_Y + MENU_SETUP_HEADER,
+                MENU_SETUP_ENTRY,
+                menu_id+1
+            );               
+        while(state == STATE_SETUP)
+        {
+            // prevent exit on entry with pressed buttom from previous menu
+            if(menu_first_entry){
+                menu_first_entry=0;
+                while(get_key() != KEY_NONE); // wait for key release
+            }
+            if(get_key() == KEY_MID)
+            {
+                // Menu navigation
+                if (menu_id < MENU_SETUP_ENTRY-1)
+                {
+                    menu_id++; // next menu entry
+                } 
+                else 
+                {
+                    menu_id = 0; 
+                }                 
                 set_cursor // set cursor to show active menu entry
                     (
                         MENU_SETUP_X+1, 
@@ -790,7 +779,6 @@ void loop()
                     );           
                 while(get_key() == KEY_MID)
                 {
-                    delay(KEY_DEBOUNCE);
                 }
             }
             // Menu action
@@ -804,13 +792,24 @@ void loop()
                     case 1: // SAVE SETTINGS
                         EEPROM.write(EEPROM_ADR_STATE,state_last_used);
                         EEPROM.write(EEPROM_ADR_TUNE,channelIndex);  
-                        osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "Settings saved..");
-                        delay(2000);
-                        state=state_last_used;
-                        // ADD CODE
+                        EEPROM.write(EEPROM_VIDEO_MODE,video_mode);                        
+                        osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), " Settings saved..");
+                        delay(1000);
+                        osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "                 ");
                     break;
                     case 2: // VIDEO MODE
-                        //state=STATE_MANUAL;
+                        // toggle and update
+                        if(video_mode== NTSC){
+                            video_mode=PAL;
+                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"PAL ");
+                        }
+                        else
+                        {
+                            video_mode=NTSC;
+                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"NTSC");       
+                        }  
+                        // wait key released
+                        while(get_key() == KEY_UP);
                     break;
                     case 3: // RSSI CALIBRATE
                         state=STATE_RSSI_SETUP;
@@ -820,10 +819,6 @@ void loop()
                     break;                    
                 } // end switch                
             }
-            
-        }
-        if (get_key() == KEY_MID) 
-        {
             
         }
     }
@@ -866,7 +861,6 @@ void loop()
         menu
         );
     #endif
-    //delay(100); // debounce
     
     #if 1
     // Dummy Testcode
@@ -1023,6 +1017,7 @@ void screen_mode_selection(void)
     osd_print(MENU_MODE_SELECTION_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
     osd_print(MENU_MODE_SELECTION_X,y++,"\x02 MODE SELECTION \x02");
     osd_print(MENU_MODE_SELECTION_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  EXIT          \x02");
     osd_print(MENU_MODE_SELECTION_X,y++,"\x02  AUTO SEARCH   \x02");
     osd_print(MENU_MODE_SELECTION_X,y++,"\x02  BAND SCANNER  \x02");
     osd_print(MENU_MODE_SELECTION_X,y++,"\x02  MANUEL MODE   \x02");
@@ -1307,10 +1302,18 @@ void screen_setup(void)
     osd_print(MENU_SETUP_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
     osd_print(MENU_SETUP_X,y++,"\x02  EXIT           \x02");
     osd_print(MENU_SETUP_X,y++,"\x02  SAVE SETTINGS  \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  VIDEO : NTSC   \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  VIDEO :        \x02");
     osd_print(MENU_SETUP_X,y++,"\x02  RSSI CALIBRATE \x02");
     osd_print(MENU_SETUP_X,y++,"\x02  FONT UPLOAD    \x02");
     osd_print(MENU_SETUP_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");   
+    // video mode handler
+    if(video_mode== NTSC){
+        osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"NTSC");
+    }
+    else
+    {
+         osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"PAL ");       
+    }
 }
 
 
@@ -1335,8 +1338,35 @@ void set_cursor(uint8_t x_offset, uint8_t y_offset, uint8_t entry, uint8_t pos)
             }
         }
 }
-
+// debounce wrapper
 uint8_t get_key (void)
+{   
+    // waits until value is stable for KEY_DEBOUNCE loops
+    uint8_t last_key=0xff;
+    uint8_t current_key=0;
+    uint16_t key_stable=0;
+    
+    if(get_key_raw()) // fast exit if no key is press, to prevent slow down of main loop
+    {
+        while(key_stable < KEY_DEBOUNCE) // loop until stable
+        {
+            current_key=get_key_raw();
+            if(current_key == last_key){
+                key_stable++;
+            }
+            else
+            {
+                key_stable=0; // glitch, reset timer
+            }
+            last_key=current_key;
+            delay(1);
+        }
+    }
+    return(current_key);
+}
+
+// no debounce
+uint8_t get_key_raw (void)
 {   
     uint8_t sw_dir_a2b = 0;
     uint8_t sw_dir_b2a = 0;    
@@ -1407,10 +1437,9 @@ void uploadFont()
     int font_count = 0;
 
     osd.clear();
-    osd.setPanel(1,1);
-    osd.openPanel();
-    osd.printf_P(PSTR("Waiting for Character Update")); 
-    osd.closePanel();
+    osd_print(2,3,"Waiting for Character Update");
+    osd_print(2,5,"  Reboot to skip update");
+    
     delay(1000);
 
     #define TELEMETRY_SPEED  57600 
