@@ -137,11 +137,67 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 // Objects and Serial definitions
 FastSerialPort0(Serial); // just for character update
 OSD osd; //OSD object 
-//SimpleTimer  mavlinkTimer;
 
 // global variables
+// Channels to sent to the SPI registers
+const uint16_t channelTable[] PROGMEM = {
+  // Channel 1 - 8
+  0x2A05,    0x299B,    0x2991,    0x2987,    0x291D,    0x2913,    0x2909,    0x289F,    // Band A
+  0x2903,    0x290C,    0x2916,    0x291F,    0x2989,    0x2992,    0x299C,    0x2A05,    // Band B
+  0x2895,    0x288B,    0x2881,    0x2817,    0x2A0F,    0x2A19,    0x2A83,    0x2A8D,    // Band E
+  0x2906,    0x2910,    0x291A,    0x2984,    0x298E,    0x2998,    0x2A02,    0x2A0C  // Band F / Airwave
+};
 
+// Channels with their Mhz Values
+const uint16_t channelFreqTable[] PROGMEM = {
+  // Channel 1 - 8
+  5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725, // Band A
+  5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866, // Band B
+  5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945, // Band E
+  5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880  // Band F / Airwave
+};
+
+const uint8_t bandNames[] PROGMEM = {
+  'A','A','A','A','A','A','A','A',
+  'B','B','B','B','B','B','B','B',
+  'E','E','E','E','E','E','E','E',
+  'F','F','F','F','F','F','F','F',
+  'R','R','R','R','R','R','R','R'
+};
+// Symbol for each channel
+const uint8_t channelNames[] PROGMEM = {
+    0xA0,0xA1,0xA2,0xA3,0xA4,0xA5,0xA6,0xA7, // Band A
+    0xA8,0xA9,0xAA,0xAB,0xAC,0xAD,0xAE,0xAF, // Band B
+    0xB0,0xB1,0xB2,0xB3,0xB4,0xB5,0xB6,0xB7, // Band E
+    0xB8,0xB9,0xBA,0xBB,0xBC,0xBD,0xBE,0xBF, // Band F
+    0xC0,0xC1,0xC2,0xC3,0xC4,0xC5,0xC6,0xC7, // Band RACE    
+};
+
+// All Channels of the above List ordered by Mhz
+const uint8_t channelList[] PROGMEM = {
+  19, 18, 17, 16, 7, 8, 24, 6, 9, 25, 5, 10, 26, 4, 11, 27, 3, 12, 28, 2, 13, 29, 1, 14, 30, 0, 15, 31, 20, 21, 22, 23
+};
+
+uint8_t channel = 0;
+uint8_t channelIndex = 0;
+uint8_t rssi = 0;
+uint8_t rssi_scaled = 0;
+uint8_t hight = 0;
 uint8_t state = START_STATE;
+uint8_t last_state= START_STATE+1; // force screen draw
+uint8_t bState = HIGH;
+uint8_t writePos = 0;
+uint8_t switch_count = 0;
+uint8_t man_channel = 0;
+uint8_t last_channel_index = 0;
+uint8_t force_seek=0;
+unsigned long time_of_tune = 0;        // will store last time when tuner was changed
+uint8_t last_maker_pos=0;
+uint8_t last_active_channel=0;
+uint8_t first_channel_marker=1;
+uint8_t update_frequency_view=0;
+uint8_t seek_found=0;
+
 
 /*
  Array to keep values for spectrum print.
@@ -158,53 +214,30 @@ uint8_t state = START_STATE;
  colum right= 3
  Organisation of array: 0:0 = bottom left corner
 */
-
 uint8_t spectrum_display[BAND_SCANNER_SPECTRUM_X_MAX][6];
 
 
 /**********************************************/
 /****************** SETUP() *******************/
-
+/**********************************************/
 void setup() 
 {
     unplugSlaves();
     osd.init();
-    osd.setPanel(1,10);
-    osd.openPanel();
-    //osd.printf("%i",freeMem()); 
-    //osd.printf_P(PSTR("\x20\x20\x20\x20\x20\x20\xba\xbb\xbc\xbd\xbe|\x20\x20\x20\x20\x20\x20\xca\xcb\xcc\xcd\xce|ArduCAM OSD v2.2"));    
-    osd.closePanel();
+
+    // tune to first channel
+    channelIndex = pgm_read_byte_near(channelList + CHANNEL_MIN);            
+//MH    setChannelModule(channelIndex);
+    last_channel_index=channelIndex;
+
     
     // setup spectrum screen array
     spectrum_init();
     //screen_mode_selection();  
     screen_band_scanner();
-/*    
-    spectrum_add_spectrum (6, 5800, 50);
-    spectrum_add_spectrum (6, 5810, 15);
-    spectrum_add_spectrum (6, 5815, 20);
-    spectrum_add_spectrum (6, 5820, 25);
-    spectrum_add_spectrum (6, 5825, 30);
-    spectrum_add_spectrum (6, 5830, 35);
 
-    
-    spectrum_add_spectrum (6, 5820, 80);    
-    spectrum_add_spectrum (6, 5645, 20);
-    spectrum_add_spectrum (6, 5900, 100);
-
-    spectrum_add_spectrum (6, 5645, 66);       
-    spectrum_add_spectrum (6, 5945, 66);   
-    
-    
-    spectrum_display[5][0]=0x33;
-    spectrum_display[5][1]=0x32;
-    spectrum_display[5][2]=0x30;
-    spectrum_display[5][3]=0x10;    
-    
-
-*/  
     #if 0
-    // simple test code 
+    // simple test code for spectrum buffer
     // adds columns direct to spectrum buffer
     spectrum_display[4][0]=0x33;
     spectrum_display[4][1]=0x13;
@@ -225,7 +258,7 @@ void setup()
     #endif
     
     #if 0
-    // add single colums to buffer
+    // Testcode to add single colums to buffer
     // test with split column
     // one since they are to close
     spectrum_add_column (6, 5845, 55); // left colum   // upper 1 
@@ -242,8 +275,8 @@ void setup()
     
     spectrum_dump();  
     #endif
-//    osd.clear();
-//    mavlinkTimer.Enable();
+    
+  
 
 } // END of setup();
 
@@ -253,7 +286,6 @@ void setup()
 /*                 MAIN LOOP                    */
 /************************************************/
 uint16_t freq=5645;
-uint8_t rssi=10;
 
 void loop() 
 {
