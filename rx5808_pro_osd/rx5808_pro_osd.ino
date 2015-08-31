@@ -76,7 +76,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 // Configurations
 
 #include "ArduCam_Max7456.h"
-
+#include <EEPROM.h>
 
 /* *************************************************/
 /* ***************** DEFINITIONS *******************/
@@ -96,22 +96,62 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define KEY_MID 3
 #define KEY_NONE 0
 
-#define RSSIMAX 75 // 75% threshold, when channel is printed in spectrum
+#define rssiPin A6
+
+// key debounce delay in ms
+// NOTE: good values are in the range of 100-200ms
+// shorter values will make it more reactive, but may lead to double trigger
+#define KEY_DEBOUNCE 200
+
+// Set you TV format (PAL = Europe = 50Hz, NTSC = INT = 60Hz)
+//#define TV_FORMAT NTSC
+#define TV_FORMAT PAL
+
+#define led 13
+// RSSI default raw range
+#define RSSI_MIN_VAL 90
+#define RSSI_MAX_VAL 300
+// 75% threshold, when channel is printed in spectrum
+#define RSSI_SEEK_FOUND 75 
+// 80% under max value for RSSI 
+#define RSSI_SEEK_TRESHOLD 80
+// scan loops for setup run
+#define RSSI_SETUP_RUN 10
+
 #define STATE_SEEK_FOUND 0
 #define STATE_SEEK 1
 #define STATE_SCAN 2
 #define STATE_MANUAL 3
+#define STATE_SWITCH 4
+#define STATE_SAVE 5
+#define STATE_RSSI_SETUP 6
 
 #define START_STATE STATE_SEEK
 #define MAX_STATE STATE_MANUAL
 
-#define KEY_DEBOUNCE 10
 #define CHANNEL_BAND_SIZE 8
 #define CHANNEL_MIN_INDEX 0
 #define CHANNEL_MAX_INDEX 31
 
 #define CHANNEL_MAX 31
 #define CHANNEL_MIN 0
+
+#define TV_COLS 128
+#define TV_ROWS 96
+#define TV_Y_MAX TV_ROWS-1
+#define TV_X_MAX TV_COLS-1
+#define TV_SCANNER_OFFSET 14
+#define SCANNER_BAR_SIZE 52
+#define SCANNER_LIST_X_POS 4
+#define SCANNER_LIST_Y_POS 16
+#define SCANNER_MARKER_SIZE 2
+
+#define EEPROM_ADR_STATE 0
+#define EEPROM_ADR_TUNE 1
+#define EEPROM_ADR_RSSI_MIN_L 2
+#define EEPROM_ADR_RSSI_MIN_H 3
+#define EEPROM_ADR_RSSI_MAX_L 4
+#define EEPROM_ADR_RSSI_MAX_H 5
 
 // Screen settings (use smaller NTSC size)
 #define SCEEEN_X_MAX 30
@@ -134,6 +174,11 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define BAND_SCANNER_RSSI_MAX 100
 #define BAND_SCANNER_SUB_BAR 3 // a character can have values 0..3
 
+// CHECK
+#define SCANNER_BAR_SIZE 55
+#define SCANNER_LIST_X_POS 4
+#define SCANNER_LIST_Y_POS 16
+#define SCANNER_MARKER_SIZE 2
 
 // Objects and Serial definitions
 FastSerialPort0(Serial); // just for character update
@@ -179,14 +224,15 @@ const uint8_t channelList[] PROGMEM = {
   19, 18, 17, 16, 7, 8, 24, 6, 9, 25, 5, 10, 26, 4, 11, 27, 3, 12, 28, 2, 13, 29, 1, 14, 30, 0, 15, 31, 20, 21, 22, 23
 };
 
+
 uint8_t channel = 0;
 uint8_t channelIndex = 0;
 uint8_t rssi = 0;
 uint8_t rssi_scaled = 0;
 uint8_t hight = 0;
 uint8_t state = START_STATE;
+uint8_t state_last_used=START_STATE;
 uint8_t last_state= START_STATE+1; // force screen draw
-uint8_t bState = HIGH;
 uint8_t writePos = 0;
 uint8_t switch_count = 0;
 uint8_t man_channel = 0;
@@ -198,6 +244,18 @@ uint8_t last_active_channel=0;
 uint8_t first_channel_marker=1;
 uint8_t update_frequency_view=0;
 uint8_t seek_found=0;
+uint8_t last_dip_channel=255;
+uint8_t last_dip_band=255;
+uint8_t scan_start=0;
+uint8_t first_tune=1;
+uint8_t force_menu_redraw=0;
+uint16_t rssi_min=0;
+uint16_t rssi_max=0;
+uint16_t rssi_setup_min=0;
+uint16_t rssi_setup_max=0;
+uint16_t rssi_seek_found=0;
+uint16_t rssi_setup_run=0;
+
 
 
 /*
@@ -226,12 +284,29 @@ void setup()
     unplugSlaves();
     osd.init();
 
-    // tune to first channel
-    channelIndex = pgm_read_byte_near(channelList + CHANNEL_MIN);            
-//MH    setChannelModule(channelIndex);
-    last_channel_index=channelIndex;
-
-    
+   // use values only of EEprom is not 255 = unsaved
+    uint8_t eeprom_check = EEPROM.read(EEPROM_ADR_STATE);
+    if(eeprom_check == 255) // unused
+    {
+        EEPROM.write(EEPROM_ADR_STATE,START_STATE);
+        EEPROM.write(EEPROM_ADR_TUNE,CHANNEL_MIN_INDEX);
+        // save 16 bit
+        EEPROM.write(EEPROM_ADR_RSSI_MIN_L,lowByte(RSSI_MIN_VAL));        
+        EEPROM.write(EEPROM_ADR_RSSI_MIN_H,highByte(RSSI_MIN_VAL));    
+        // save 16 bit
+        EEPROM.write(EEPROM_ADR_RSSI_MAX_L,lowByte(RSSI_MAX_VAL));
+        EEPROM.write(EEPROM_ADR_RSSI_MAX_H,highByte(RSSI_MAX_VAL));
+    }
+    // debug reset EEPROM
+    //EEPROM.write(EEPROM_ADR_STATE,255);    
+        
+    // read last setting from eeprom
+    state=EEPROM.read(EEPROM_ADR_STATE);
+    channelIndex=EEPROM.read(EEPROM_ADR_TUNE);
+    rssi_min=((EEPROM.read(EEPROM_ADR_RSSI_MIN_H)<<8) | (EEPROM.read(EEPROM_ADR_RSSI_MIN_L)));
+    rssi_max=((EEPROM.read(EEPROM_ADR_RSSI_MAX_H)<<8) | (EEPROM.read(EEPROM_ADR_RSSI_MAX_L)));
+    force_menu_redraw=1;
+ 
     // setup spectrum screen array
     spectrum_init();
     //screen_mode_selection();  
@@ -316,16 +391,19 @@ void loop()
     }     
 #endif
     
+
     /*******************/
     /*   Mode Select   */
     /*******************/
-
+    state_last_used=state; // save save settings
     if (get_key() == KEY_MID) // key pressed ?
     {      
+        osd_print_debug(1,1,"switch_count",switch_count);
         if (switch_count > KEY_DEBOUNCE) // Button debounce
         {      
             // Show Mode Screen
-
+            #define MAX_MENU 4
+            uint8_t menu_id=0;
             if(state==STATE_SEEK_FOUND)
             {
                 state=STATE_SEEK;
@@ -346,19 +424,29 @@ void loop()
                        
                 // set menu to current mode
                 uint8_t menu=0;
-                switch (state) 
+                switch (menu_id) 
                 {    
-                    case STATE_SEEK: // auto search
-                        menu=1;                 
+                    case 0: // auto search
+                        menu=1;                      
+                        state=STATE_SEEK;
+                        force_seek=1;
+                        seek_found=0;
                     break;
-                    case STATE_SCAN: // Band Scanner
-                        menu=2;                                                      
+                    case 1: // Band Scanner  
+                        menu=2;  
+                        state=STATE_SCAN;
+                        scan_start=1;
                     break;
-                    case STATE_MANUAL: // manual mode 
-                        menu=3;                                    
+                    case 2: // manual mode 
+                        menu=3;  
+                        state=STATE_MANUAL;
                     break;
-                } // end switch  
-                 set_cursor // set cursor to show active menu entry
+                    case 4: // Save settings 
+                        menu=4;                      
+                        state=STATE_SAVE;
+                    break;
+                } // end switch    
+                set_cursor // set cursor to show active menu entry
                     (
                         MENU_MODE_SELECTION_X+1, 
                         MENU_MODE_SELECTION_Y + MENU_MODE_SELECTION_HEADER,
@@ -366,8 +454,7 @@ void loop()
                         menu
                     );   
                 if(entry) // wait until key is released ONLY for first entry
-                {
-                    
+                {                    
                     while(get_key() == KEY_MID);
                     entry=0;
                 }
@@ -389,23 +476,23 @@ void loop()
                 }
                 else // no timeout, must be keypressed
                 {
+                    in_menu_time_out=10;                
                     /*********************/
-                    /*   State handler   */
+                    /*   Menu handler   */
                     /*********************/
-                    if (state < MAX_STATE)
+                    if (menu_id < MAX_MENU)
                     {
-                        state++; // next state
+                        menu_id++; // next state
                     } 
                     else 
                     {
-                        state = START_STATE; 
-                    }                  
+                        menu_id = 0; 
+                    }                                  
+    
                 }
             } while(in_menu);
             last_state=255; // force redraw of current screen
-            switch_count = 0;       
-            // clean line?
-// MH ????            TV.print(TV_COLS/2, (TV_ROWS/2), "             ");                  
+            switch_count = 0;              
         } 
         else 
         { // Button debounce
@@ -416,7 +503,311 @@ void loop()
     { // reset debounce      
         switch_count = 0;    
     }
+    /***************************************/
+    /*   Draw screen if mode has changed   */
+    /***************************************/
+    if(force_menu_redraw || state != last_state)
+    {
+        force_menu_redraw=0;
+        /************************/
+        /*   Main screen draw   */
+        /************************/            
+        // changed state, clear an draw new screen       
     
+        switch (state) 
+        {    
+            case STATE_SCAN: // Band Scanner
+            case STATE_RSSI_SETUP: // RSSI setup
+            // screen RSSI setup
+                screen_band_scanner();
+                if(state==STATE_SCAN)
+                {    
+                 //   TV.printPGM(10, TV_Y_OFFSET,  PSTR(" BAND SCANNER"));                 
+                }
+                else
+                {
+                  //  TV.printPGM(10, TV_Y_OFFSET,  PSTR("  RSSI SETUP "));
+//                    TV.print(10, SCANNER_LIST_Y_POS, "RSSI Min:     RSSI Max:   ");                    
+                    // prepare new setup
+                    rssi_min=0;
+                    rssi_max=400; // set to max range
+                    rssi_setup_min=400;
+                    rssi_setup_max=0;   
+                    rssi_setup_run=RSSI_SETUP_RUN;
+                }   
+                // trigger new scan from begin
+                channel=CHANNEL_MIN;
+                writePos=SCANNER_LIST_X_POS; // reset channel list
+                channelIndex = pgm_read_byte_near(channelList + channel);  
+                scan_start=1;
+            break;
+            case STATE_MANUAL: // manual mode 
+            case STATE_SEEK: // seek mode
+                screen_manual();            
+                if (state == STATE_MANUAL)
+                {
+ //                   TV.printPGM(10, TV_Y_OFFSET,  PSTR(" MANUAL MODE"));                
+                }
+                else if(state == STATE_SEEK)
+                {
+//                    TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE SEEK"));                
+                }
+                first_channel_marker=1;
+                update_frequency_view=1;
+                force_seek=1;
+            break;
+            case STATE_SAVE:
+                screen_save();             
+                EEPROM.write(EEPROM_ADR_STATE,state_last_used);
+                EEPROM.write(EEPROM_ADR_TUNE,channelIndex);             
+                switch (state_last_used) 
+                {    
+                    case STATE_SCAN: // Band Scanner
+//                        TV.printPGM(50,5+1*MENU_Y_SIZE,  PSTR("Scanner")); 
+                    break;
+                    case STATE_MANUAL: // manual mode 
+//                    TV.printPGM(50,5+1*MENU_Y_SIZE,  PSTR("Manual"));                    
+                    break;
+                    case STATE_SEEK: // seek mode
+//                      TV.printPGM(50,5+1*MENU_Y_SIZE,  PSTR("Search"));                     
+                    break;
+              
+                }
+//              TV.printPGM(10, 5+2*MENU_Y_SIZE, PSTR("Band:")); 
+                // print band
+
+//              TV.printPGM(10, 5+3*MENU_Y_SIZE, PSTR("Chan:"));   
+                uint8_t active_channel = channelIndex%CHANNEL_BAND_SIZE+1; // get channel inside band
+//              TV.printPGM(10, 5+4*MENU_Y_SIZE, PSTR("FREQ:     GHz"));      
+
+//              TV.printPGM(10, 5+5*MENU_Y_SIZE, PSTR("--- SAVED ---"));
+//              TV.printPGM(10, 14+5*MENU_Y_SIZE,     PSTR("Hold MODE to enter RSSI setup"));
+                delay(1000);
+                delay(1000);                
+//              if (digitalRead(buttonMode) == LOW) // to RSSI setup
+
+//                   state=STATE_RSSI_SETUP;
+            // selection by inverted box            
+            break;
+        } // end switch
+        last_state=state;
+    }
+    /*************************************/
+    /*   Processing depending of state   */
+    /*************************************/
+
+    /*****************************************/
+    /*   Processing MANUAL MODE / SEEK MODE  */
+    /*****************************************/
+    if(state == STATE_MANUAL || state == STATE_SEEK || state == STATE_SWITCH)
+    {
+        if(state == STATE_MANUAL) // MANUAL MODE
+        {
+            // handling of keys
+            if( get_key() == KEY_UP )        // channel UP
+            {
+                delay(KEY_DEBOUNCE); // debounce            
+                channelIndex++;
+                if (channelIndex > CHANNEL_MAX_INDEX) 
+                {  
+                    channelIndex = CHANNEL_MIN_INDEX;
+                }
+                update_frequency_view=1;        
+            }
+            if( get_key() == KEY_DOWN) // channel DOWN
+            {
+                delay(KEY_DEBOUNCE); // debounce 
+                channelIndex--;
+                if (channelIndex > CHANNEL_MAX_INDEX) // negative overflow
+                {  
+                    channelIndex = CHANNEL_MAX_INDEX;
+                }    
+                update_frequency_view=1;        
+            }            
+        }
+    
+        // display refresh handler
+        if(update_frequency_view) // only updated on changes
+        {
+            // show current used channel of bank
+            // show channel inside band
+            uint8_t active_channel = channelIndex%CHANNEL_BAND_SIZE; // get channel inside band
+            // set new marker
+            // show frequence
+        }                
+        // show signal strength            
+        #define RSSI_BAR_SIZE 100
+        rssi_scaled=map(rssi, 1, 100, 1, RSSI_BAR_SIZE);        
+        //  draw new bar
+//        TV.draw_rect(25, TV_Y_OFFSET+4*TV_Y_GRID, rssi_scaled, 4 , WHITE, WHITE);        
+        // print bar for spectrum
+        channel=channel_from_index(channelIndex); // get 0...31 index depending of current channel            
+        wait_rssi_ready();
+        #define SCANNER_BAR_MINI_SIZE 14
+        rssi = readRSSI();
+        rssi_scaled=map(rssi, 1, 100, 1, SCANNER_BAR_MINI_SIZE);
+        hight = (TV_ROWS - TV_SCANNER_OFFSET - rssi_scaled);
+       //  draw new bar
+        // set marker in spectrum to show current scanned channel
+        if(channel < CHANNEL_MAX_INDEX)
+        {
+            // clear last square
+            // draw next
+            last_maker_pos=channel;
+        }
+        else
+        {
+          //  No action on last position to keep frame intact
+        }        
+        // handling for seek mode after screen and RSSI has been fully processed
+        if(state == STATE_SEEK) //
+        { // SEEK MODE
+            if(!seek_found) // search if not found
+            {
+                if ((!force_seek) && (rssi > RSSI_SEEK_TRESHOLD)) // check for found channel
+                {
+                    seek_found=1; 
+                    // beep twice as notice of lock
+                    // PRINT LOCK
+                } 
+                else 
+                { // seeking itself
+                    force_seek=0;
+                    // next channel
+                    if (channel < CHANNEL_MAX) 
+                    {
+                        channel++;
+                    } else {
+                        channel=CHANNEL_MIN;
+                    }    
+                    channelIndex = pgm_read_byte_near(channelList + channel);        
+                }        
+            }
+            else
+            { // seek was successful            
+//                TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE LOCK"));        
+                if (get_key() == KEY_UP) // restart seek if key pressed
+                {
+                    delay(KEY_DEBOUNCE); // debounce                 
+                    force_seek=1;
+                    seek_found=0; 
+//                    TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE SEEK"));        
+                }                
+            }
+        }        
+    }
+    /****************************/
+    /*   Processing SCAN MODE   */
+    /****************************/
+    else if (state == STATE_SCAN || state == STATE_RSSI_SETUP) 
+    {
+        // force tune on new scan start to get right RSSI value
+        if(scan_start)
+        {
+            scan_start=0;
+            setChannelModule(channelIndex);    
+            last_channel_index=channelIndex;
+            // keep time of tune to make sure that RSSI is stable when required
+            time_of_tune=millis();
+        }
+        // channel marker
+        if(channel < CHANNEL_MAX_INDEX)
+        {
+            // clear last square
+//            TV.draw_rect((last_maker_pos * 4)+2, (TV_ROWS - TV_SCANNER_OFFSET + 8),SCANNER_MARKER_SIZE,SCANNER_MARKER_SIZE,  BLACK, BLACK);                
+            // draw next
+//            TV.draw_rect((channel * 4)+2, (TV_ROWS - TV_SCANNER_OFFSET + 8),SCANNER_MARKER_SIZE,SCANNER_MARKER_SIZE,  WHITE, WHITE);
+            last_maker_pos=channel;
+        }
+        else
+        {
+          //  No action on last position to keep frame intact
+        }
+        // print bar for spectrum
+        wait_rssi_ready();
+        // value must be ready
+        rssi = readRSSI();
+        rssi_scaled=map(rssi, 1, 100, 5, SCANNER_BAR_SIZE);
+        hight = (TV_ROWS - TV_SCANNER_OFFSET - rssi_scaled);
+        // clear last bar
+//        TV.draw_rect((channel * 4), (TV_ROWS - TV_SCANNER_OFFSET - SCANNER_BAR_SIZE), 3, SCANNER_BAR_SIZE , BLACK, BLACK);
+        //  draw new bar
+//        TV.draw_rect((channel * 4), hight, 3, rssi_scaled , WHITE, WHITE);
+        // print channelname
+        if(state == STATE_SCAN)        
+        {
+            if (rssi > RSSI_SEEK_TRESHOLD) 
+            {
+//              TV.draw_rect(writePos, SCANNER_LIST_Y_POS, 20, 6,  BLACK, BLACK);
+//              TV.print(writePos, SCANNER_LIST_Y_POS, pgm_read_byte_near(channelNames + channelIndex), HEX);
+//              TV.print(writePos+10, SCANNER_LIST_Y_POS, pgm_read_word_near(channelFreqTable + channelIndex));
+//              writePos += 30;
+//              // mark bar
+//              TV.print((channel * 4) - 3, hight - 5, pgm_read_byte_near(channelNames + channelIndex), HEX);            
+            }
+        }       
+        // next channel
+        if (channel < CHANNEL_MAX) 
+        {
+            channel++;
+        } else 
+        {
+            channel=CHANNEL_MIN;
+            writePos=SCANNER_LIST_X_POS; // reset channel list
+            if(state == STATE_RSSI_SETUP)        
+            {
+                if(!rssi_setup_run--)    
+                {
+                    // setup done
+                    rssi_min=rssi_setup_min;
+                    rssi_max=rssi_setup_max;
+                    // save 16 bit
+                    EEPROM.write(EEPROM_ADR_RSSI_MIN_L,(rssi_min & 0xff));        
+                    EEPROM.write(EEPROM_ADR_RSSI_MIN_H,(rssi_min >> 8));    
+                    // save 16 bit
+                    EEPROM.write(EEPROM_ADR_RSSI_MAX_L,(rssi_max & 0xff));
+                    EEPROM.write(EEPROM_ADR_RSSI_MAX_H,(rssi_max >> 8));                    
+                    state=EEPROM.read(EEPROM_ADR_STATE);
+                    //beep(1000);
+                }
+            }            
+        }    
+        // new scan possible by press scan
+        if (get_key() == KEY_UP) // force new full new scan
+        {
+            delay(KEY_DEBOUNCE); // debounce         
+            last_state=255; // force redraw by fake state change ;-)
+            channel=CHANNEL_MIN;
+            writePos=SCANNER_LIST_X_POS; // reset channel list
+            scan_start=1;
+        }            
+        // update index after channel change
+        channelIndex = pgm_read_byte_near(channelList + channel);            
+    }
+
+    /*****************************/
+    /*   General house keeping   */
+    /*****************************/    
+    if(last_channel_index != channelIndex)         // tune channel on demand
+    {
+        setChannelModule(channelIndex);    
+        last_channel_index=channelIndex;
+        // keep time of tune to make sure that RSSI is stable when required
+        time_of_tune=millis();
+        // give 3 beeps when tuned to give feedback of correct start
+        if(first_tune)
+        {
+//          first_tune=0;
+//          #define UP_BEEP 100
+//          beep(UP_BEEP);
+//          delay(UP_BEEP);
+//          beep(UP_BEEP);
+//          delay(UP_BEEP);
+//          beep(UP_BEEP);
+        }
+    }
+    //rssi = readRSSI();   
+ 
     
     
     
@@ -432,7 +823,7 @@ void loop()
         menu
         );
     #endif
-    delay(100); // debounce
+    //delay(100); // debounce
     
     #if 1
     if(freq <= 5945)
@@ -462,7 +853,94 @@ void loop()
 /*              SUB ROUTINES                    */
 /************************************************/
 
+// driver RX module
+void setChannelModule(uint8_t channel) 
+{
+  uint8_t i;
+  uint16_t channelData;
+}
 
+uint8_t channel_from_index(uint8_t channelIndex)
+{
+    uint8_t loop=0;
+    uint8_t channel=0;
+    for (loop=0;loop<=CHANNEL_MAX;loop++)
+    {
+        if(pgm_read_byte_near(channelList + loop) == channelIndex)
+        {
+            channel=loop;
+            break;
+        }
+    }
+    return (channel);
+}    
+
+
+void wait_rssi_ready()
+{
+    // CHECK FOR MINIMUM DELAY
+    // check if RSSI is stable after tune by checking the time
+    uint16_t tune_time = millis()-time_of_tune;
+    // module need >20ms to tune.
+    // 30 ms will to a 32 channel scan in 1 second.
+    #define MIN_TUNE_TIME 30
+    if(tune_time < MIN_TUNE_TIME)
+    {
+        // wait until tune time is full filled
+        delay(MIN_TUNE_TIME-tune_time);
+    }
+}
+      
+
+
+uint16_t readRSSI() 
+{
+    uint16_t rssi = 0;
+    for (uint8_t i = 0; i < 10; i++) 
+    {
+        rssi += analogRead(rssiPin);
+    }
+    rssi=rssi/10; // average
+    // special case for RSSI setup
+    if(state==STATE_RSSI_SETUP)
+    { // RSSI setup
+        if(rssi < rssi_setup_min)
+        {
+            rssi_setup_min=rssi;
+//            TV.print(50, SCANNER_LIST_Y_POS, "   ");
+//            TV.print(50, SCANNER_LIST_Y_POS, rssi_setup_min , DEC);            
+        }
+        if(rssi > rssi_setup_max)
+        {
+            rssi_setup_max=rssi;
+//        TV.print(110, SCANNER_LIST_Y_POS, "   ");
+//        TV.print(110, SCANNER_LIST_Y_POS, rssi_setup_max , DEC);                    
+        }    
+        // dump current values
+    }   
+    //TV.print(50, SCANNER_LIST_Y_POS-10, rssi_min , DEC);  
+    //TV.print(110, SCANNER_LIST_Y_POS-10, rssi_max , DEC); 
+    // scale AD RSSI Valaues to 1-100%     
+    //#define RSSI_DEBUG 
+
+    // Filter glitches
+    #ifdef RSSI_DEBUG
+//        TV.print(1,20, "RAW:             ");
+//        TV.print(30,20, rssi, DEC);    
+    #endif
+    rssi = constrain(rssi, rssi_min, rssi_max);    //original 90---250
+    rssi=rssi-rssi_min; // set zero point (value 0...160)
+    rssi = map(rssi, 0, rssi_max-rssi_min , 1, 100);   // scale from 1..100%
+    #ifdef RSSI_DEBUG
+//        TV.print(1,40, "SCALED:           ");    
+//        TV.print(50,40, rssi, DEC);    
+    #endif
+// TEST CODE    
+    rssi=random(0, 100);        
+    return (rssi);
+}
+      
+   
 void osd_print (uint8_t x, uint8_t y, char string[30])
 {
     osd.setPanel(x-1,y-1);  
@@ -748,7 +1226,7 @@ void spectrum_dump (void)
 // Band scanner screen
 void screen_band_scanner(void)
 {
-
+    osd.clear();
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       BAND SCANNER      \x02");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
@@ -756,6 +1234,31 @@ void screen_band_scanner(void)
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
     spectrum_dump();    
 }
+
+// Band scanner screen
+void screen_manual(void)
+{
+    osd.clear();
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       MANUAL      \x02");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
+    spectrum_dump();    
+}
+
+// Band scanner screen
+void screen_save(void)
+{
+    osd.clear();
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       SETUP      \x02");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
+    spectrum_dump();    
+}
+
 
 
 
