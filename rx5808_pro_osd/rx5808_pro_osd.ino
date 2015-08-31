@@ -94,6 +94,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define KEY_UP 2
 #define KEY_DOWN 1
 #define KEY_MID 3
+#define KEY_NONE 0
 
 #define RSSIMAX 75 // 75% threshold, when channel is printed in spectrum
 #define STATE_SEEK_FOUND 0
@@ -289,6 +290,8 @@ uint16_t freq=5645;
 
 void loop() 
 {
+
+#if 0
     uint8_t key_pressed = get_key();
     
     if(key_pressed == KEY_MID)
@@ -311,6 +314,115 @@ void loop()
             menu=4;
         }        
     }     
+#endif
+    
+    /*******************/
+    /*   Mode Select   */
+    /*******************/
+
+    if (get_key() == KEY_MID) // key pressed ?
+    {      
+        if (switch_count > KEY_DEBOUNCE) // Button debounce
+        {      
+            // Show Mode Screen
+
+            if(state==STATE_SEEK_FOUND)
+            {
+                state=STATE_SEEK;
+            }
+            uint8_t in_menu=1;
+            uint8_t in_menu_time_out=10; // 10x 200ms = 2 seconds
+            uint8_t entry=1;
+            /*
+            Enter Mode menu
+            Show current mode
+            Change mode by MODE key
+            Any Mode will refresh screen
+            If not MODE changes in 2 seconds, it uses last selected mode
+            */
+            do
+            {
+                screen_mode_selection();
+                       
+                // set menu to current mode
+                uint8_t menu=0;
+                switch (state) 
+                {    
+                    case STATE_SEEK: // auto search
+                        menu=1;                 
+                    break;
+                    case STATE_SCAN: // Band Scanner
+                        menu=2;                                                      
+                    break;
+                    case STATE_MANUAL: // manual mode 
+                        menu=3;                                    
+                    break;
+                } // end switch  
+                 set_cursor // set cursor to show active menu entry
+                    (
+                        MENU_MODE_SELECTION_X+1, 
+                        MENU_MODE_SELECTION_Y + MENU_MODE_SELECTION_HEADER,
+                        MENU_MODE_SELECTION_ENTRY,
+                        menu
+                    );   
+                if(entry) // wait until key is released ONLY for first entry
+                {
+                    
+                    while(get_key() == KEY_MID);
+                    entry=0;
+                }
+                // new key resets timeout counter
+                if(get_key() == KEY_MID)
+                {                    
+                    // wait for MODE release
+                    in_menu_time_out=20;                   
+                }
+                delay(200); // debounce
+                //key_pressed = get_key();                 
+                while(--in_menu_time_out && (get_key() == KEY_NONE)) // wait for next mode or time out
+                {
+                    delay(200); // timeout delay                
+                }    
+                if(in_menu_time_out==0) 
+                {
+                    in_menu=0; // EXIT
+                }
+                else // no timeout, must be keypressed
+                {
+                    /*********************/
+                    /*   State handler   */
+                    /*********************/
+                    if (state < MAX_STATE)
+                    {
+                        state++; // next state
+                    } 
+                    else 
+                    {
+                        state = START_STATE; 
+                    }                  
+                }
+            } while(in_menu);
+            last_state=255; // force redraw of current screen
+            switch_count = 0;       
+            // clean line?
+// MH ????            TV.print(TV_COLS/2, (TV_ROWS/2), "             ");                  
+        } 
+        else 
+        { // Button debounce
+            switch_count++;         
+        }      
+    } 
+    else // key pressed
+    { // reset debounce      
+        switch_count = 0;    
+    }
+    
+    
+    
+    
+    
+    
+    
     #if 0
     set_cursor
         (
@@ -379,6 +491,7 @@ void osd_print_debug_x (uint8_t x, uint8_t y, char string[30], uint16_t value)
 void screen_mode_selection(void)
 {
     uint8_t y=MENU_MODE_SELECTION_Y;
+    osd.clear();
     osd_print(MENU_MODE_SELECTION_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
     osd_print(MENU_MODE_SELECTION_X,y++,"\x02 MODE SELECTION \x02");
     osd_print(MENU_MODE_SELECTION_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
