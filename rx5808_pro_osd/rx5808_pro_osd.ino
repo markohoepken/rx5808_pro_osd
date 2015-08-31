@@ -415,6 +415,7 @@ void loop()
         if (switch_count > WAIT_MODE_ENTRY)
         {   
             state=STATE_MODE_SELECT;
+            menu_first_entry=1;
         } 
         else 
         {
@@ -688,6 +689,11 @@ void loop()
  
         while(state == STATE_MODE_SELECT)
         {
+            // prevent exit on entry with pressed buttom from previous menu
+            if(menu_first_entry){
+                menu_first_entry=0;
+                while(get_key() != KEY_NONE); // wait for key release
+            }
             if(get_key() == KEY_MID)
             {
                 // Menu navigation
