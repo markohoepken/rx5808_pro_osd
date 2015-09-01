@@ -213,12 +213,19 @@ const uint16_t channelFreqTable[] PROGMEM = {
   5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917  // Race Band
 };
 
-const uint8_t bandNames[] PROGMEM = {
+const uint8_t bandNames[] PROGMEM = { // faster than calculate
   'A','A','A','A','A','A','A','A',
   'B','B','B','B','B','B','B','B',
   'E','E','E','E','E','E','E','E',
   'F','F','F','F','F','F','F','F',
   'R','R','R','R','R','R','R','R'
+};
+const uint8_t bandNumber[] PROGMEM = { // faster than calculate
+  0,0,0,0,0,0,0,0,
+  1,1,1,1,1,1,1,1,
+  2,2,2,2,2,2,2,2,
+  3,3,3,3,3,3,3,3,
+  4,4,4,4,4,4,4,4,
 };
 // Symbol for each channel
 const uint8_t channelSymbol[] PROGMEM = {
@@ -1347,10 +1354,24 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+11+(2*active_channel),4,active);  
     // FREQUENCY
     osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+8,5,pgm_read_word_near(channelFreqTable + channelIndex));
-    // set available channels
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX,"\xb0 \xb3 \xb2 \xb1\xb2  \xb4 \xb5 \xb6 \xb7");
+    // set available channels marker
+    uint8_t loop=0;
+    for(loop=0;loop<8;loop++)
+    {
+        uint8_t band_number=pgm_read_byte_near(bandNumber + channelIndex);
+        uint8_t channel=(band_number*8 + loop);
+        uint16_t frequency=pgm_read_word_near(channelFreqTable + channel);
+        // calculate x postion (see code of spectrm_add_column for details)
+        uint16_t frequency_delta=(frequency-BAND_SCANNER_FREQ_MIN); // no rouding issue
+        uint16_t frequency_per_char=((BAND_SCANNER_FREQ_MAX-BAND_SCANNER_FREQ_MIN)*INTEGER_GAIN)/((BAND_SCANNER_SPECTRUM_X_MAX-1)*2);
+        uint8_t x_pos_54= (frequency_delta*(INTEGER_GAIN+ROUND_CORRECTION)) / frequency_per_char;
+        uint8_t x=((x_pos_54)/2); // final down scale to single character
+        // print marker
+        osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+x,SCREEN_Y_MAX,pgm_read_byte_near(channelSymbol + channel));
+    }
     // add spectrum of current channel
     spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), random(0, 100));
+    // add marker for all channel per active band
     spectrum_dump(3);    
     
 }
