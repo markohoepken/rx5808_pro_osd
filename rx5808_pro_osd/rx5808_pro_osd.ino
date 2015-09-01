@@ -199,7 +199,8 @@ const uint16_t channelTable[] PROGMEM = {
   0x2A05,    0x299B,    0x2991,    0x2987,    0x291D,    0x2913,    0x2909,    0x289F,    // Band A
   0x2903,    0x290C,    0x2916,    0x291F,    0x2989,    0x2992,    0x299C,    0x2A05,    // Band B
   0x2895,    0x288B,    0x2881,    0x2817,    0x2A0F,    0x2A19,    0x2A83,    0x2A8D,    // Band E
-  0x2906,    0x2910,    0x291A,    0x2984,    0x298E,    0x2998,    0x2A02,    0x2A0C  // Band F / Airwave
+  0x2906,    0x2910,    0x291A,    0x2984,    0x298E,    0x2998,    0x2A02,    0x2A0C,    // Band F / Airwave
+  0x281d,    0x2890,    0x2902,    0x2915,    0x2987,    0x299a,    0x2a0c,    0x2a1f     // IRC Race Band  
 };
 
 // Channels with their Mhz Values
@@ -208,7 +209,8 @@ const uint16_t channelFreqTable[] PROGMEM = {
   5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725, // Band A
   5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866, // Band B
   5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945, // Band E
-  5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880  // Band F / Airwave
+  5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880,  // Band F / Airwave
+  5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917  // Race Band
 };
 
 const uint8_t bandNames[] PROGMEM = {
@@ -219,12 +221,12 @@ const uint8_t bandNames[] PROGMEM = {
   'R','R','R','R','R','R','R','R'
 };
 // Symbol for each channel
-const uint8_t channelNames[] PROGMEM = {
+const uint8_t channelSymbol[] PROGMEM = {
     0xA0,0xA1,0xA2,0xA3,0xA4,0xA5,0xA6,0xA7, // Band A
     0xA8,0xA9,0xAA,0xAB,0xAC,0xAD,0xAE,0xAF, // Band B
     0xB0,0xB1,0xB2,0xB3,0xB4,0xB5,0xB6,0xB7, // Band E
     0xB8,0xB9,0xBA,0xBB,0xBC,0xBD,0xBE,0xBF, // Band F
-    0xC0,0xC1,0xC2,0xC3,0xC4,0xC5,0xC6,0xC7, // Band RACE    
+    0xC0,0xC1,0xC2,0xC3,0xC4,0xC5,0xC6,0xC7  // Band RACE    
 };
 
 // All Channels of the above List ordered by Mhz
@@ -323,7 +325,7 @@ void setup()
     // setup spectrum screen array
     spectrum_init();
     //screen_mode_selection();  
-    screen_band_scanner();
+    screen_band_scanner(0);
 
     #if 0
     // simple test code for spectrum buffer
@@ -343,7 +345,7 @@ void setup()
     spectrum_display[6][2]=0x31;
     spectrum_display[6][3]=0x20;    
     
-    spectrum_dump();  
+    spectrum_dump(6);  
     #endif
     
     #if 0
@@ -362,7 +364,7 @@ void setup()
     spectrum_add_column (6, 5800, 100); // middle
     spectrum_add_column (6, 5945, 100); // righ
     
-    spectrum_dump();  
+    spectrum_dump(6);  
     #endif
     
   
@@ -442,13 +444,13 @@ void loop()
             case STATE_SCAN: // Band Scanner
             case STATE_RSSI_SETUP: // RSSI setup
             // screen RSSI setup
-                screen_band_scanner();
                 if(state==STATE_SCAN)
                 {    
-                 //   TV.printPGM(10, TV_Y_OFFSET,  PSTR(" BAND SCANNER"));                 
+                    screen_band_scanner(0);             
                 }
                 else
                 {
+                    screen_band_scanner(1);                      
                   //  TV.printPGM(10, TV_Y_OFFSET,  PSTR("  RSSI SETUP "));
 //                    TV.print(10, SCANNER_LIST_Y_POS, "RSSI Min:     RSSI Max:   ");                    
                     // prepare new setup
@@ -466,13 +468,15 @@ void loop()
             break;
             case STATE_MANUAL: // manual mode 
             case STATE_SEEK: // seek mode
-                screen_manual();            
+          
                 if (state == STATE_MANUAL)
                 {
+                    screen_manual(0,12);                  
  //                   TV.printPGM(10, TV_Y_OFFSET,  PSTR(" MANUAL MODE"));                
                 }
                 else if(state == STATE_SEEK)
                 {
+                    screen_manual(1,18);  
 //                    TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE SEEK"));                
                 }
                 first_channel_marker=1;
@@ -891,7 +895,7 @@ void loop()
             freq=5645;
             }
     
-        spectrum_dump(); 
+        spectrum_dump(6); 
         delay(10);        
     }
         
@@ -996,6 +1000,20 @@ void osd_print (uint8_t x, uint8_t y, char string[30])
     osd.setPanel(x-1,y-1);  
     osd.openPanel();
     osd.printf("%s",string); 
+    osd.closePanel(); 
+}
+void osd_print_int (uint8_t x, uint8_t y, uint16_t value)
+{
+    osd.setPanel(x-1,y-1);  
+    osd.openPanel();
+    osd.printf("%d",value); 
+    osd.closePanel(); 
+}
+void osd_print_char (uint8_t x, uint8_t y, char value)
+{
+    osd.setPanel(x-1,y-1);  
+    osd.openPanel();
+    osd.printf("%c",value); 
     osd.closePanel(); 
 }
 void osd_print_debug (uint8_t x, uint8_t y, char string[30], uint16_t value)
@@ -1255,7 +1273,7 @@ char spectrum_get_char(uint8_t value)
     return(ret);
 }
 
-void spectrum_dump (void)
+void spectrum_dump (uint8_t height)
 {
     // for fast dump, each line is printed at once.
     // the strings will be created from the spetrum array
@@ -1263,7 +1281,7 @@ void spectrum_dump (void)
     string[BAND_SCANNER_SPECTRUM_X_MAX]=0; // string termination
     uint8_t  x=0;
     uint8_t  y=0;
-    for (y=0; y<6;y++)     
+    for (y=0; y<height;y++)     
     {
         for (x=0; x<BAND_SCANNER_SPECTRUM_X_MAX;x++)
         {
@@ -1275,27 +1293,74 @@ void spectrum_dump (void)
 }
 
 // Band scanner screen
-void screen_band_scanner(void)
+void screen_band_scanner(uint8_t mode)
 {
+    //  mode
+    // 0 : scanner
+    // 1 : RSSI calibration
     osd.clear();
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       BAND SCANNER      \x02");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+    if(mode==0)
+    {
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       BAND SCANNER      \x02");    
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+    }
+    else
+    {
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     RSSI CALIBRATION    \x02");        
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x02Run:?? MIN:???   MAX:??? \x02");        
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+        }
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
-    spectrum_dump();    
+    spectrum_dump(6);    
 }
 
-// Band scanner screen
-void screen_manual(void)
+// Manual settings screen
+void screen_manual(uint8_t mode, uint8_t channelIndex)
 {
+    uint8_t y=1;
+//    String buffer; // for dynamic output
+    char buffer[31]; // for dynamic output
+    char value; // for character insertion
+    // mode
+    // 0: manual
+    // 1: seek
     osd.clear();
+    // static default text
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       MANUAL      \x02");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+    if(mode == 0)
+    {
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02          MANUAL         \x02");
+    }
+    else
+    {
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02          SEEK           \x02");
+    }    
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,5,"\x02 FREQ: ???? GHz          \x02");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,6,"\x02 RSSI:\x83\x87\x87\x87\x87\x87\x84\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x89\x02");    
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,7,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
-    spectrum_dump();    
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");        
+
+    // set correct values by replace some characters (simple code)
+    // BAND
+    osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+8,4,pgm_read_byte_near(bandNames + channelIndex));  
+    // ACTIVE CHANNEL
+    uint8_t active_channel = channelIndex%CHANNEL_BAND_SIZE; // get channel inside band
+    char active=0x18 + active_channel;
+    osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+11+(2*active_channel),4,active);  
+    // FREQUENCY
+    osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+8,5,pgm_read_word_near(channelFreqTable + channelIndex));
+    // set available channels
+    
+    
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX,"\xb0 \xb3 \xb2 \xb1\xb2  \xb4 \xb5 \xb6 \xb7");
+
+ spectrum_dump(3);    
+    
 }
 
 // Band scanner screen
