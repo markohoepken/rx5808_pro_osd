@@ -101,7 +101,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 // key debounce delay in ms
 // NOTE: good values are in the range of 100-200ms
 // shorter values will make it more reactive, but may lead to double trigger
-#define KEY_DEBOUNCE 20 // debounce in ms
+#define KEY_DEBOUNCE 30 // debounce in ms
 
 // Set you TV format (PAL = Europe = 50Hz, NTSC = INT = 60Hz)
 //#define TV_FORMAT NTSC
@@ -132,9 +132,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 
 #define CHANNEL_BAND_SIZE 8
 #define CHANNEL_MIN_INDEX 0
-#define CHANNEL_MAX_INDEX 31
+#define CHANNEL_MAX_INDEX 39
 
-#define CHANNEL_MAX 31
+#define CHANNEL_MAX 39
 #define CHANNEL_MIN 0
 
 #define TV_COLS 128
@@ -471,12 +471,12 @@ void loop()
           
                 if (state == STATE_MANUAL)
                 {
-                    screen_manual(0,12);                  
+                    screen_manual(0,channelIndex);                  
  //                   TV.printPGM(10, TV_Y_OFFSET,  PSTR(" MANUAL MODE"));                
                 }
                 else if(state == STATE_SEEK)
                 {
-                    screen_manual(1,18);  
+                    screen_manual(1,channelIndex);  
 //                    TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE SEEK"));                
                 }
                 first_channel_marker=1;
@@ -510,8 +510,8 @@ void loop()
                 if (channelIndex > CHANNEL_MAX_INDEX) 
                 {  
                     channelIndex = CHANNEL_MIN_INDEX;
-                }
-                update_frequency_view=1;        
+                } 
+                force_menu_redraw=1; // show changes
             }
             if( get_key() == KEY_DOWN) // channel DOWN
             {
@@ -520,19 +520,10 @@ void loop()
                 {  
                     channelIndex = CHANNEL_MAX_INDEX;
                 }    
-                update_frequency_view=1;        
+                force_menu_redraw=1; // show changes
             }            
         }
     
-        // display refresh handler
-        if(update_frequency_view) // only updated on changes
-        {
-            // show current used channel of bank
-            // show channel inside band
-            uint8_t active_channel = channelIndex%CHANNEL_BAND_SIZE; // get channel inside band
-            // set new marker
-            // show frequence
-        }                
         // show signal strength            
         #define RSSI_BAR_SIZE 100
         rssi_scaled=map(rssi, 1, 100, 1, RSSI_BAR_SIZE);        
@@ -733,6 +724,7 @@ void loop()
                         state_last_used=state;
                         force_seek=1;
                         seek_found=0;
+                        spectrum_init();                        
                     break;
                     case 2: // BAND SCANNER
                         state=STATE_SCAN;
@@ -741,7 +733,8 @@ void loop()
                     break;
                     case 3: // MANUEL MODE
                         state=STATE_MANUAL;   
-                        state_last_used=state;                        
+                        state_last_used=state; 
+                        spectrum_init();                        
                     break;
                     case 4: // SETUP
                         menu_first_entry=1;
@@ -1355,11 +1348,10 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     // FREQUENCY
     osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+8,5,pgm_read_word_near(channelFreqTable + channelIndex));
     // set available channels
-    
-    
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX,"\xb0 \xb3 \xb2 \xb1\xb2  \xb4 \xb5 \xb6 \xb7");
-
- spectrum_dump(3);    
+    // add spectrum of current channel
+    spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), random(0, 100));
+    spectrum_dump(3);    
     
 }
 
