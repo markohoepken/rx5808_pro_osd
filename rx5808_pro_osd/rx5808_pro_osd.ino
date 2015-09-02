@@ -77,6 +77,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 
 #include "ArduCam_Max7456.h"
 #include <EEPROM.h>
+#include "Spi.h"
 
 /* *************************************************/
 /* ***************** DEFINITIONS *******************/
@@ -96,7 +97,12 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define KEY_MID 3
 #define KEY_NONE 0
 
-#define rssiPin A6
+#define rssiPin A1   // Depands on patch of minimOSD
+#define rx5808_SEL 5 // Depands on patch of minimOSD
+
+#define spiDataPin 11
+#define slaveSelectPin 5
+#define spiClockPin 13
 
 // key debounce delay in ms
 // NOTE: good values are in the range of 100-200ms
@@ -326,8 +332,22 @@ void setup()
     force_menu_redraw=1;
  
     unplugSlaves();
+    //SPI Spi = SPI();
     osd.setMode(video_mode);
     osd.init();
+    // set pins
+    pinMode(rx5808_SEL,OUTPUT);
+    digitalWrite(rx5808_SEL,HIGH);
+    pinMode(rssiPin,INPUT); 
+    
+    // SPI pins for RX control
+    pinMode (slaveSelectPin, OUTPUT);
+    pinMode (spiDataPin, OUTPUT);
+	pinMode (spiClockPin, OUTPUT);
+    
+    
+ #define rssiPin A1   // Depands on patch of minimOSD
+#define rx5808_SEL 5 // Depands on patch of minimOSD
  
     // setup spectrum screen array
     spectrum_init();
@@ -420,7 +440,7 @@ void loop()
     // Special handler you must press the mode some time to get in
     if ((state != STATE_SETUP) && get_key() == KEY_MID) // key pressed ?
     {      
-        osd_print_debug(1,1,"switch_count",switch_count);
+                osd_print_debug(1,1,"switch_count",switch_count);(1,1,"switch_count",switch_count);
         if (switch_count > WAIT_MODE_ENTRY)
         {   
             state=STATE_MODE_SELECT;
@@ -907,12 +927,234 @@ void loop()
 /*              SUB ROUTINES                    */
 /************************************************/
 
+void spi_32_transfer(uint32_t value)
+{
+    uint8_t* buffer = (uint8_t*) &value; // for simple byte access
+    
+    Spi.mode((1<<DORD));  // set to SPI LSB first mode  
+    digitalWrite(rx5808_SEL,LOW); // select
+    Spi.transfer(*(buffer + 0)); // byte 0
+    Spi.transfer(*(buffer + 1)); // byte 1
+    Spi.transfer(*(buffer + 2)); // byte 2
+    Spi.transfer(*(buffer + 3)); // byte 3
+    digitalWrite(rx5808_SEL,HIGH); // transfer done
+    Spi.mode(0);  // set SPI mode back to MSB first (used by OSD)
+  //buffer32=0xaabbccdd;
+  osd_print_debug_x (1, 1, "val0", *(buffer + 0));
+  osd_print_debug_x (1, 2, "val1", *(buffer + 1));
+  osd_print_debug_x (1, 3, "val2", *(buffer + 2));
+  osd_print_debug_x (1, 4, "val3", *(buffer + 3));
+
+    
+    
+}
+
 // driver RX module
-void setChannelModule(uint8_t channel) 
+void setChannelModule__(uint8_t channel) 
 {
   uint8_t i;
   uint16_t channelData;
+  channelData = pgm_read_word_near(channelTable + channel);
+  uint32_t buffer32=0;
+  uint8_t address = 0;
+  uint32_t data = 0;
+  uint8_t write = 0;
+  
+  // note to SPI of rx5808 chip (RTC6715)
+  // The SPI interface needs 25 bits to be written.
+  // The HW SPI controller of the Atmel has 8 bit.
+  // Since 8 does not fit 8 bit, we must transfer "more" bits (32 bit)
+  // This is possible because the shift register of the RTC6715 will 
+  // use the "last" bits when CS goes passive.
+  // This means, that we transfer 7x dummy '0' + 25 bits = 32 bits.
+  
+  
+  // data format 25 bits
+  // Order: A0-3, !R/W, D0-D19
+  // NOTE: LSB first!
+  
+  
+  // This order is required:
+  // A0=0, A1=0, A2=0, A3=1, RW=0, D0-19=0
+  
+  // LSB first
+  // 1. send 7bit x dummy '0'
+  // 2. 4 bit adress
+  // 3. RW bit
+  // 4. 20 bit data
+  
+  // for efficient code the follwing data structre in a uint32_t is used:
+  
+  // MSB                           LSB  
+  // D19...D0 + RW + A3...A0 + 0000000
+  //    20 bit + 1 bit + 4 bit + 7 bit = 32 bit
+  // DDDDDDDDDDDDDDDDDDDDRAAAA0000000
+  //                    ^
+  //                    12
+  //                     ^
+  //                     11  ^
+  //                         7 
+  // SPI must set to DORD = 1 (Data Order LSB first
+  
+  
+  // read operation ??? CHECK
+
+ /* TEST VALUES
+  uint8_t address = 0xF;
+  uint32_t data = 0x12345;
+  uint8_t rw = 1;    
+*/
+ 
+  address = 0x8;
+  data = 0x0;
+  write = 0;
+ 
+  buffer32=0; //  init buffer to 0
+  buffer32=((data & 0xfffff) << 12 ) | ((write & 1)<<11) | ((address & 0xf) <<7);
+  
+  spi_32_transfer(buffer32);
+
+  address = 0x1;
+  data = channelData;
+  write = 1;
+
+  buffer32=0; //  init buffer to 0
+  buffer32=((data & 0xfffff) << 12 ) | ((write & 1)<<11) | ((address & 0xf) <<7);
+  spi_32_transfer(buffer32);
 }
+
+
+void setChannelModule(uint8_t channel)
+{
+  uint8_t i;
+  uint16_t channelData;
+
+  SPCR = 0; // release SPI 
+  
+  //channelData = pgm_read_word(&channelTable[channel]);
+  //channelData = channelTable[channel];
+  channelData = pgm_read_word_near(channelTable + channel);
+
+  // bit bash out 25 bits of data
+  // Order: A0-3, !R/W, D0-D19
+  // A0=0, A1=0, A2=0, A3=1, RW=0, D0-19=0
+  SERIAL_ENABLE_HIGH();
+  delayMicroseconds(1);  
+  //delay(2);
+  SERIAL_ENABLE_LOW();
+
+  SERIAL_SENDBIT0();
+  SERIAL_SENDBIT0();
+  SERIAL_SENDBIT0();
+  SERIAL_SENDBIT1();
+
+  SERIAL_SENDBIT0();
+
+  // remaining zeros
+  for (i = 20; i > 0; i--)
+    SERIAL_SENDBIT0();
+
+  // Clock the data in
+  SERIAL_ENABLE_HIGH();
+  //delay(2);
+  delayMicroseconds(1);  
+  SERIAL_ENABLE_LOW();
+
+  // Second is the channel data from the lookup table
+  // 20 bytes of register data are sent, but the MSB 4 bits are zeros
+  // register address = 0x1, write, data0-15=channelData data15-19=0x0
+  SERIAL_ENABLE_HIGH();
+  SERIAL_ENABLE_LOW();
+
+  // Register 0x1
+  SERIAL_SENDBIT1();
+  SERIAL_SENDBIT0();
+  SERIAL_SENDBIT0();
+  SERIAL_SENDBIT0();
+
+  // Write to register
+  SERIAL_SENDBIT1();
+
+  // D0-D15
+  //   note: loop runs backwards as more efficent on AVR
+  for (i = 16; i > 0; i--)
+  {
+    // Is bit high or low?
+    if (channelData & 0x1)
+    {
+      SERIAL_SENDBIT1();
+    }
+    else
+    {
+      SERIAL_SENDBIT0();
+    }
+
+    // Shift bits along to check the next one
+    channelData >>= 1;
+  }
+
+  // Remaining D16-D19
+  for (i = 4; i > 0; i--)
+    SERIAL_SENDBIT0();
+
+  // Finished clocking data in
+  SERIAL_ENABLE_HIGH();
+  delayMicroseconds(1);
+  //delay(2);
+
+  digitalWrite(slaveSelectPin, LOW);
+  digitalWrite(spiClockPin, LOW);
+  digitalWrite(spiDataPin, LOW);
+  
+    Spi.mode(0);  // set SPI mode back to MSB first (used by OSD)  
+  
+}
+
+
+void SERIAL_SENDBIT1()
+{
+  digitalWrite(spiClockPin, LOW);
+  delayMicroseconds(1);
+
+  digitalWrite(spiDataPin, HIGH);
+  delayMicroseconds(1);
+  digitalWrite(spiClockPin, HIGH);
+  delayMicroseconds(1);
+
+  digitalWrite(spiClockPin, LOW);
+  delayMicroseconds(1);
+}
+
+void SERIAL_SENDBIT0()
+{
+  digitalWrite(spiClockPin, LOW);
+  delayMicroseconds(1);
+
+  digitalWrite(spiDataPin, LOW);
+  delayMicroseconds(1);
+  digitalWrite(spiClockPin, HIGH);
+  delayMicroseconds(1);
+
+  digitalWrite(spiClockPin, LOW);
+  delayMicroseconds(1);
+}
+
+void SERIAL_ENABLE_LOW()
+{
+  delayMicroseconds(1);
+  digitalWrite(slaveSelectPin, LOW);
+  delayMicroseconds(1);
+}
+
+void SERIAL_ENABLE_HIGH()
+{
+  delayMicroseconds(1);
+  digitalWrite(slaveSelectPin, HIGH);
+  delayMicroseconds(1);
+}
+
+  
+  
 
 uint8_t channel_from_index(uint8_t channelIndex)
 {
@@ -990,7 +1232,7 @@ uint16_t readRSSI()
 //        TV.print(50,40, rssi, DEC);    
     #endif
 // TEST CODE    
-    rssi=random(0, 100);        
+    //rssi=random(0, 100);        
     return (rssi);
 }
       
