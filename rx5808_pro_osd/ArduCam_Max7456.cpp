@@ -33,6 +33,7 @@ void OSD::init()
   //read black level register
   Spi.transfer(MAX7456_OSDBL_reg_read);//black level read register
   byte osdbl_r = Spi.transfer(0xff);
+  // SW reset
   Spi.transfer(MAX7456_VM0_reg);
   Spi.transfer(MAX7456_RESET | video_mode);
   delay(50);
@@ -237,14 +238,19 @@ OSD::control(uint8_t ctrl){
   digitalWrite(MAX7456_SELECT,LOW);
   Spi.transfer(MAX7456_VM0_reg);
   switch(ctrl){
-    case 0:
+    case 0: // OSD off
       Spi.transfer(MAX7456_DISABLE_display | video_mode);
       break;
-    case 1:
+    case 1:  // OSD on with autosync 
       //Spi.transfer((MAX7456_ENABLE_display_vert | video_mode) | MAX7456_SYNC_internal);
       //Spi.transfer((MAX7456_ENABLE_display_vert | video_mode) | MAX7456_SYNC_external);
       Spi.transfer((MAX7456_ENABLE_display_vert | video_mode) | MAX7456_SYNC_autosync); 
       break;
+    case 2: // OSD on with internal sync
+      Spi.transfer((MAX7456_ENABLE_display_vert | video_mode) | MAX7456_SYNC_internal);
+      //Spi.transfer((MAX7456_ENABLE_display_vert | video_mode) | MAX7456_SYNC_external);
+      //Spi.transfer((MAX7456_ENABLE_display_vert | video_mode) | MAX7456_SYNC_autosync); 
+      break;      
   }
   digitalWrite(MAX7456_SELECT,HIGH);
 }
