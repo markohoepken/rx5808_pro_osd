@@ -243,9 +243,12 @@ const uint8_t channelSymbol[] PROGMEM = {
 };
 
 // All Channels of the above List ordered by Mhz
-const uint8_t channelList[] PROGMEM = {
-  19, 18, 17, 16, 7, 8, 24, 6, 9, 25, 5, 10, 26, 4, 11, 27, 3, 12, 28, 2, 13, 29, 1, 14, 30, 0, 15, 31, 20, 21, 22, 23, 33,34,35,36,37,38,39,40
-};
+
+//  dynamic arry that keeps the channel ID sorted by frequence.
+uint8_t channelList[CHANNEL_MAX_INDEX+1]={};
+//const uint8_t channelList[] PROGMEM = {
+//  19, 18, 17, 16, 7, 8, 24, 6, 9, 25, 5, 10, 26, 4, 11, 27, 3, 12, 28, 2, 13, 29, 1, 14, 30, 0, 15, 31, 20, 21, 22, 23, 33,34,35,36,37,38,39,40
+//};
 
 
 uint8_t channel = 0;
@@ -306,6 +309,28 @@ uint8_t spectrum_display[BAND_SCANNER_SPECTRUM_X_MAX][6];
 /**********************************************/
 void setup() 
 {
+    // create channelList lookup sorted by freqency
+    // 1. fill array
+    for(int i=0; i<=CHANNEL_MAX_INDEX; i++) 
+    {
+        channelList[i]=i;
+    }
+    // Bubble sort algorism by value of freqency reference
+    for(int i=0; i<CHANNEL_MAX_INDEX; i++) {
+        for(int o=0; o<((CHANNEL_MAX_INDEX+1)-(i+1)); o++) 
+        {
+            if(pgm_read_word_near(channelFreqTable + channelList[o])> pgm_read_word_near(channelFreqTable + channelList[o+1])) // compare two elements to each other and swap on demand
+            { 
+                // swap index;
+                int t = channelList[o];
+                channelList[o] = channelList[o+1];
+                channelList[o+1] = t;
+            }
+        }
+    }
+    
+    
+
    // use values only of EEprom is not 255 = unsaved
     uint8_t eeprom_check = EEPROM.read(EEPROM_ADR_STATE);
     if(eeprom_check == 255) // unused
@@ -439,7 +464,9 @@ void loop()
                 // trigger new scan from begin
                 channel=CHANNEL_MIN;
                 writePos=SCANNER_LIST_X_POS; // reset channel list
-                channelIndex = pgm_read_byte_near(channelList + channel);  
+//                channelIndex = pgm_read_byte_near(channelList + channel);  
+                channelIndex = channelList[channel];  
+                
                 scan_start=1;
                 osd.control(2); // internal sync                
             break;
@@ -537,7 +564,8 @@ void loop()
                     } else {
                         channel=CHANNEL_MIN;
                     }    
-                    channelIndex = pgm_read_byte_near(channelList + channel);                         
+                    //channelIndex = pgm_read_byte_near(channelList + channel);   
+                    channelIndex = channelList[channel];                      
                     screen_manual_data(channelIndex); // update data on screen
                 }        
             }
@@ -639,7 +667,8 @@ void loop()
             scan_start=1;
         }            
         // update index after channel change
-        channelIndex = pgm_read_byte_near(channelList + channel);            
+        //channelIndex = pgm_read_byte_near(channelList + channel);     
+        channelIndex = channelList[channel];          
     }
     else if (state == STATE_MODE_SELECT) 
     {
@@ -1132,8 +1161,9 @@ uint8_t channel_from_index(uint8_t channelIndex)
     uint8_t loop=0;
     uint8_t channel=0;
     for (loop=0;loop<=CHANNEL_MAX;loop++)
-    {
-        if(pgm_read_byte_near(channelList + loop) == channelIndex)
+    {                
+    //if(pgm_read_byte_near(channelList + loop) == channelIndex)
+    if(channelList[loop] == channelIndex)
         {
             channel=loop;
             break;
