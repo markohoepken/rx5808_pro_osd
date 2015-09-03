@@ -328,6 +328,15 @@ void setup()
     channelIndex=EEPROM.read(EEPROM_ADR_TUNE);
     rssi_min=((EEPROM.read(EEPROM_ADR_RSSI_MIN_H)<<8) | (EEPROM.read(EEPROM_ADR_RSSI_MIN_L)));
     rssi_max=((EEPROM.read(EEPROM_ADR_RSSI_MAX_H)<<8) | (EEPROM.read(EEPROM_ADR_RSSI_MAX_L)));
+
+ // DEBUG
+    rssi_min=100;
+    rssi_max=270;
+    
+
+      
+
+    
     video_mode=EEPROM.read(EEPROM_VIDEO_MODE);
     force_menu_redraw=1;
  
@@ -338,7 +347,7 @@ void setup()
     // set pins
     pinMode(rx5808_SEL,OUTPUT);
     digitalWrite(rx5808_SEL,HIGH);
-    pinMode(rssiPin,INPUT); 
+    //pinMode(rssiPin,INPUT); 
     
     // SPI pins for RX control
     pinMode (slaveSelectPin, OUTPUT);
@@ -346,53 +355,14 @@ void setup()
 	pinMode (spiClockPin, OUTPUT);
     
     
- #define rssiPin A1   // Depands on patch of minimOSD
-#define rx5808_SEL 5 // Depands on patch of minimOSD
+
  
     // setup spectrum screen array
     spectrum_init();
     //screen_mode_selection();  
     screen_band_scanner(0);
 
-    #if 0
-    // simple test code for spectrum buffer
-    // adds columns direct to spectrum buffer
-    spectrum_display[4][0]=0x33;
-    spectrum_display[4][1]=0x13;
-    spectrum_display[4][2]=0x03;
-    spectrum_display[4][3]=0x03; 
-    
-    spectrum_display[5][0]=0x33;
-    spectrum_display[5][1]=0x32;
-    spectrum_display[5][2]=0x30;
-    spectrum_display[5][3]=0x10;    
-    
-    spectrum_display[6][0]=0x33;
-    spectrum_display[6][1]=0x33;
-    spectrum_display[6][2]=0x31;
-    spectrum_display[6][3]=0x20;    
-    
-    spectrum_dump(6);  
-    #endif
-    
-    #if 0
-    // Testcode to add single colums to buffer
-    // test with split column
-    // one since they are to close
-    spectrum_add_column (6, 5845, 55); // left colum   // upper 1 
-    spectrum_add_column (6, 5847, 88); // right column  // upper 0
-                 
-    //two colums
-    spectrum_add_column (6, 5710, 77); // left colum   // upper 1 
-    spectrum_add_column (6, 5718, 22); // right column  // upper 0
-                
-    // corners   
-    spectrum_add_column (6, 5645, 100); // left
-    spectrum_add_column (6, 5800, 100); // middle
-    spectrum_add_column (6, 5945, 100); // righ
-    
-    spectrum_dump(6);  
-    #endif
+
     
   
 
@@ -408,31 +378,6 @@ uint16_t freq=5645;
 void loop() 
 {
 
-#if 0
-    uint8_t key_pressed = get_key();
-    
-    if(key_pressed == KEY_MID)
-    {
-        uploadFont(); // will not return
-    }    
-    if(key_pressed == KEY_UP)
-    {
-        menu++;
-        if(menu > 4)
-        {
-            menu=1;
-        }
-    }   
-    if(key_pressed == KEY_DOWN)
-    {
-        menu--;
-        if(menu < 1)
-        {
-            menu=4;
-        }        
-    }     
-#endif
-    
 
     /************************/
     /*   Mode Select Enty   */
@@ -551,30 +496,15 @@ void loop()
             }            
         }
     
-        // show signal strength            
-        #define RSSI_BAR_SIZE 100
-        rssi_scaled=map(rssi, 1, 100, 1, RSSI_BAR_SIZE);        
-        //  draw new bar
-//        TV.draw_rect(25, TV_Y_OFFSET+4*TV_Y_GRID, rssi_scaled, 4 , WHITE, WHITE);        
         // print bar for spectrum
         channel=channel_from_index(channelIndex); // get 0...31 index depending of current channel            
         wait_rssi_ready();
-        #define SCANNER_BAR_MINI_SIZE 14
         rssi = readRSSI();
-        rssi_scaled=map(rssi, 1, 100, 1, SCANNER_BAR_MINI_SIZE);
-        hight = (TV_ROWS - TV_SCANNER_OFFSET - rssi_scaled);
-       //  draw new bar
-        // set marker in spectrum to show current scanned channel
-        if(channel < CHANNEL_MAX_INDEX)
-        {
-            // clear last square
-            // draw next
-            last_maker_pos=channel;
-        }
-        else
-        {
-          //  No action on last position to keep frame intact
-        }        
+        // add spectrum of current channel
+        spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), rssi);
+        spectrum_dump(3);    
+        
+      
         // handling for seek mode after screen and RSSI has been fully processed
         if(state == STATE_SEEK) //
         { // SEEK MODE
@@ -620,30 +550,21 @@ void loop()
         if(scan_start)
         {
             scan_start=0;
-            setChannelModule(channelIndex);    
+            setChannelModule(channelIndex);  // tune  
             last_channel_index=channelIndex;
             // keep time of tune to make sure that RSSI is stable when required
             time_of_tune=millis();
-        }
-        // channel marker
-        if(channel < CHANNEL_MAX_INDEX)
-        {
-            // clear last square
-//            TV.draw_rect((last_maker_pos * 4)+2, (TV_ROWS - TV_SCANNER_OFFSET + 8),SCANNER_MARKER_SIZE,SCANNER_MARKER_SIZE,  BLACK, BLACK);                
-            // draw next
-//            TV.draw_rect((channel * 4)+2, (TV_ROWS - TV_SCANNER_OFFSET + 8),SCANNER_MARKER_SIZE,SCANNER_MARKER_SIZE,  WHITE, WHITE);
-            last_maker_pos=channel;
-        }
-        else
-        {
-          //  No action on last position to keep frame intact
         }
         // print bar for spectrum
         wait_rssi_ready();
         // value must be ready
         rssi = readRSSI();
-        rssi_scaled=map(rssi, 1, 100, 5, SCANNER_BAR_SIZE);
-        hight = (TV_ROWS - TV_SCANNER_OFFSET - rssi_scaled);
+        // add spectrum of current channel
+        spectrum_add_column (5, pgm_read_word_near(channelFreqTable + channelIndex), rssi);
+        spectrum_dump(6);          
+        //rssi_scaled=map(rssi, 1, 100, 5, SCANNER_BAR_SIZE);
+     
+//        hight = (TV_ROWS - TV_SCANNER_OFFSET - rssi_scaled);
         // clear last bar
 //        TV.draw_rect((channel * 4), (TV_ROWS - TV_SCANNER_OFFSET - SCANNER_BAR_SIZE), 3, SCANNER_BAR_SIZE , BLACK, BLACK);
         //  draw new bar
@@ -664,11 +585,11 @@ void loop()
         // next channel
         if (channel < CHANNEL_MAX) 
         {
-            channel++;
+            channel++; // increment
         } else 
         {
             channel=CHANNEL_MIN;
-            writePos=SCANNER_LIST_X_POS; // reset channel list
+//            writePos=SCANNER_LIST_X_POS; // reset channel list
             if(state == STATE_RSSI_SETUP)        
             {
                 if(!rssi_setup_run--)    
@@ -692,7 +613,7 @@ void loop()
         {   
             last_state=255; // force redraw by fake state change ;-)
             channel=CHANNEL_MIN;
-            writePos=SCANNER_LIST_X_POS; // reset channel list
+//            writePos=SCANNER_LIST_X_POS; // reset channel list
             scan_start=1;
         }            
         // update index after channel change
@@ -756,7 +677,8 @@ void loop()
                     case 2: // BAND SCANNER
                         state=STATE_SCAN;
                         state_last_used=state;                        
-                        scan_start=1;                    
+                        scan_start=1;   
+                        spectrum_init();                          
                     break;
                     case 3: // MANUEL MODE
                         state=STATE_MANUAL;   
@@ -858,7 +780,7 @@ void loop()
     /*****************************/    
     if(last_channel_index != channelIndex)         // tune channel on demand
     {
-        setChannelModule(channelIndex);    
+        setChannelModule(channelIndex);   // TUNE 
         last_channel_index=channelIndex;
         // keep time of tune to make sure that RSSI is stable when required
         time_of_tune=millis();
@@ -879,20 +801,9 @@ void loop()
     
     
     
-    
-    
+
     
     #if 0
-    set_cursor
-        (
-        MENU_MODE_SELECTION_X+1, 
-        MENU_MODE_SELECTION_Y + MENU_MODE_SELECTION_HEADER,
-        MENU_MODE_SELECTION_ENTRY,
-        menu
-        );
-    #endif
-    
-    #if 1
     // Dummy Testcode
     if (state == STATE_SCAN)
     {    
@@ -1029,12 +940,17 @@ void setChannelModule(uint8_t channel)
   uint8_t i;
   uint16_t channelData;
 
-  SPCR = 0; // release SPI 
+
   
   //channelData = pgm_read_word(&channelTable[channel]);
   //channelData = channelTable[channel];
   channelData = pgm_read_word_near(channelTable + channel);
 
+  osd_print_debug_x (1, 1, "TUNE:", channelData);  
+  SPCR = 0; // release SPI 
+  SERIAL_ENABLE_HIGH();
+  //delay(500);  
+  
   // bit bash out 25 bits of data
   // Order: A0-3, !R/W, D0-D19
   // A0=0, A1=0, A2=0, A3=1, RW=0, D0-19=0
@@ -1099,14 +1015,17 @@ void setChannelModule(uint8_t channel)
 
   // Finished clocking data in
   SERIAL_ENABLE_HIGH();
-  delayMicroseconds(1);
+  //digitalWrite(slaveSelectPin, LOW);
+  //digitalWrite(spiClockPin, LOW);
+  //digitalWrite(spiDataPin, LOW);  
+  //delay(500);
   //delay(2);
 
-  digitalWrite(slaveSelectPin, LOW);
-  digitalWrite(spiClockPin, LOW);
-  digitalWrite(spiDataPin, LOW);
+  //digitalWrite(slaveSelectPin, LOW);
+  //digitalWrite(spiClockPin, LOW);
+  //digitalWrite(spiDataPin, LOW);
   
-    Spi.mode(0);  // set SPI mode back to MSB first (used by OSD)  
+  Spi.mode(0);  // set SPI mode back to MSB first (used by OSD)  
   
 }
 
@@ -1220,6 +1139,10 @@ uint16_t readRSSI()
     //#define RSSI_DEBUG 
 
     // Filter glitches
+    osd_print_debug (1, 3, " min: ",rssi_min );  
+    osd_print_debug (16, 3, " max: ",rssi_max );  
+    
+    osd_print_debug (1, 2, " RSSI r: ",rssi );  
     #ifdef RSSI_DEBUG
 //        TV.print(1,20, "RAW:             ");
 //        TV.print(30,20, rssi, DEC);    
@@ -1232,7 +1155,9 @@ uint16_t readRSSI()
 //        TV.print(50,40, rssi, DEC);    
     #endif
 // TEST CODE    
-    //rssi=random(0, 100);        
+    //rssi=random(0, 100);     
+
+    osd_print_debug (16, 2, " RSSI: ",rssi );     
     return (rssi);
 }
       
@@ -1596,6 +1521,7 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+11+(2*active_channel),4,active);  
     // FREQUENCY
     osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+8,5,pgm_read_word_near(channelFreqTable + channelIndex));
+    // add marker for all channel per active band
     // set available channels marker
     uint8_t loop=0;
     for(loop=0;loop<8;loop++)
@@ -1612,8 +1538,7 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
         osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+x,SCREEN_Y_MAX,pgm_read_byte_near(channelSymbol + channel));
     }
     // add spectrum of current channel
-    spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), random(0, 100));
-    // add marker for all channel per active band
+    //spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), random(0, 100));
     spectrum_dump(3);    
     
 }
