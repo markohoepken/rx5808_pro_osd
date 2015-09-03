@@ -425,7 +425,7 @@ void loop()
         if(!menu_no_hide)
         {
             menu_hide_timer--;
-            osd_print_debug(1,1,"hide",menu_hide_timer);
+            //osd_print_debug(1,1,"hide",menu_hide_timer);
         }
     }
 
@@ -629,26 +629,12 @@ void loop()
         // add spectrum of current channel
         spectrum_add_column (6, pgm_read_word_near(channelFreqTable + channelIndex), rssi);
         spectrum_dump(6);          
-        //rssi_scaled=map(rssi, 1, 100, 5, SCANNER_BAR_SIZE);
-     
-//        hight = (TV_ROWS - TV_SCANNER_OFFSET - rssi_scaled);
-        // clear last bar
-//        TV.draw_rect((channel * 4), (TV_ROWS - TV_SCANNER_OFFSET - SCANNER_BAR_SIZE), 3, SCANNER_BAR_SIZE , BLACK, BLACK);
-        //  draw new bar
-//        TV.draw_rect((channel * 4), hight, 3, rssi_scaled , WHITE, WHITE);
-        // print channelname
         if(state == STATE_SCAN)        
         {
             if (rssi > RSSI_SEEK_TRESHOLD) 
             {
-//              TV.draw_rect(writePos, SCANNER_LIST_Y_POS, 20, 6,  BLACK, BLACK);
-//              TV.print(writePos, SCANNER_LIST_Y_POS, pgm_read_byte_near(channelNames + channelIndex), HEX);
-//              TV.print(writePos+10, SCANNER_LIST_Y_POS, pgm_read_word_near(channelFreqTable + channelIndex));
-//              writePos += 30;
-//              // mark bar
-//              TV.print((channel * 4) - 3, hight - 5, pgm_read_byte_near(channelNames + channelIndex), HEX);            
-            }
-            
+                // names of found channels                
+            }            
         }       
         // next channel
         if (channel < CHANNEL_MAX) 
@@ -670,7 +656,7 @@ void loop()
                     // save 16 bit
                     EEPROM.write(EEPROM_ADR_RSSI_MAX_L,(rssi_max & 0xff));
                     EEPROM.write(EEPROM_ADR_RSSI_MAX_H,(rssi_max >> 8));                    
-                    state=EEPROM.read(EEPROM_ADR_STATE);
+                    state=state_last_used;                 
                     osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), " Settings saved..");
                     delay(1000);
                 }
@@ -679,9 +665,7 @@ void loop()
                     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x02Run:   MIN:      MAX:    \x02");                        
                     osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+5,3,rssi_setup_run);
                     osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+12,3,rssi_setup_min);
-                    osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+22,3,rssi_setup_max);
-                    
-                
+                    osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+22,3,rssi_setup_max);                
                 }
             }            
         }    
@@ -826,18 +810,23 @@ void loop()
                         osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), " Settings saved..");
                         delay(1000);
                         osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "                 ");
+                        state=state_last_used;  // fast exit
                     break;
                     case 2: // VIDEO MODE
                         // toggle and update
                         if(video_mode== NTSC){
                             video_mode=PAL;
-                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"PAL ");
+                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"PAL * ");                            
                         }
                         else
                         {
                             video_mode=NTSC;
-                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"NTSC");       
-                        }  
+                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"NTSC *");       
+                        } 
+                        EEPROM.write(EEPROM_VIDEO_MODE,video_mode);
+                        osd_print (MENU_SETUP_X-2, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "* Saved, needs restart!");
+                        delay(1000);
+                        //osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "                      ");
                         // wait key released
                         while(get_key() == KEY_UP);
                     break;
@@ -1292,6 +1281,32 @@ void screen_mode_selection(void)
     osd_print(MENU_MODE_SELECTION_X,y++,"\x02  SETUP         \x02");
     osd_print(MENU_MODE_SELECTION_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
 }
+
+// Setup screen
+void screen_setup(void)
+{
+    uint8_t y=MENU_SETUP_Y;
+    osd.clear();
+    osd_print(MENU_SETUP_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print(MENU_SETUP_X,y++,"\x02       SETUP     \x02");
+    osd_print(MENU_SETUP_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
+    osd_print(MENU_SETUP_X,y++,"\x02  EXIT           \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  SAVE SETTINGS  \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  VIDEO :        \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  RSSI CALIBRATE \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  FONT UPLOAD    \x02");
+    osd_print(MENU_SETUP_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");   
+    // video mode handler
+    if(video_mode== NTSC){
+        osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"NTSC");
+    }
+    else
+    {
+         osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"PAL ");       
+    }
+}
+
+
 /*******************/
 /*   BAND SCANNER   */
 /*******************/
@@ -1629,29 +1644,6 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     
 }
 
-// Band scanner screen
-void screen_setup(void)
-{
-    uint8_t y=MENU_SETUP_Y;
-    osd.clear();
-    osd_print(MENU_SETUP_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
-    osd_print(MENU_SETUP_X,y++,"\x02 SETUP (UP=SAVE) \x02");
-    osd_print(MENU_SETUP_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
-    osd_print(MENU_SETUP_X,y++,"\x02  EXIT           \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  SAVE SETTINGS  \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  VIDEO :        \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  RSSI CALIBRATE \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  FONT UPLOAD    \x02");
-    osd_print(MENU_SETUP_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");   
-    // video mode handler
-    if(video_mode== NTSC){
-        osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"NTSC");
-    }
-    else
-    {
-         osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"PAL ");       
-    }
-}
 
 
 
