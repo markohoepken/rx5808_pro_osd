@@ -143,15 +143,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define CHANNEL_MAX 39
 #define CHANNEL_MIN 0
 
-#define TV_COLS 128
-#define TV_ROWS 96
-#define TV_Y_MAX TV_ROWS-1
-#define TV_X_MAX TV_COLS-1
-#define TV_SCANNER_OFFSET 14
-#define SCANNER_BAR_SIZE 52
-#define SCANNER_LIST_X_POS 4
-#define SCANNER_LIST_Y_POS 16
-#define SCANNER_MARKER_SIZE 2
 
 #define EEPROM_ADR_STATE 0
 #define EEPROM_ADR_TUNE 1
@@ -188,11 +179,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define BAND_SCANNER_RSSI_MAX 100
 #define BAND_SCANNER_SUB_BAR 3 // a character can have values 0..3
 
-// CHECK
-#define SCANNER_BAR_SIZE 55
-#define SCANNER_LIST_X_POS 4
-#define SCANNER_LIST_Y_POS 16
-#define SCANNER_MARKER_SIZE 2
+
 
 // Objects and Serial definitions
 FastSerialPort0(Serial); // just for character update
@@ -244,7 +231,7 @@ const uint8_t channelSymbol[] PROGMEM = {
 
 // All Channels of the above List ordered by Mhz
 
-//  dynamic arry that keeps the channel ID sorted by frequence.
+//  dynamic arry that keeps the channel ID sorted by frequence for seqeunce scan
 uint8_t channelList[CHANNEL_MAX_INDEX+1]={};
 //const uint8_t channelList[] PROGMEM = {
 //  19, 18, 17, 16, 7, 8, 24, 6, 9, 25, 5, 10, 26, 4, 11, 27, 3, 12, 28, 2, 13, 29, 1, 14, 30, 0, 15, 31, 20, 21, 22, 23, 33,34,35,36,37,38,39,40
@@ -302,6 +289,8 @@ uint8_t video_mode=PAL;
  Organisation of array: 0:0 = bottom left corner
 */
 uint8_t spectrum_display[BAND_SCANNER_SPECTRUM_X_MAX][6];
+uint8_t spectrum_display_value[BAND_SCANNER_SPECTRUM_X_MAX*2]; // keeps rssi value for each column
+uint8_t spectrum_channel_value[CHANNEL_MAX+1]; // keeps rssi value for each column
 
 
 /**********************************************/
@@ -354,13 +343,6 @@ void setup()
     rssi_min=((EEPROM.read(EEPROM_ADR_RSSI_MIN_H)<<8) | (EEPROM.read(EEPROM_ADR_RSSI_MIN_L)));
     rssi_max=((EEPROM.read(EEPROM_ADR_RSSI_MAX_H)<<8) | (EEPROM.read(EEPROM_ADR_RSSI_MAX_L)));
 
- // DEBUG
-    //rssi_min=100;
-    //rssi_max=270;
-    
-
-      
-
     
     video_mode=EEPROM.read(EEPROM_VIDEO_MODE);
     force_menu_redraw=1;
@@ -372,8 +354,7 @@ void setup()
     // set pins
     pinMode(rx5808_SEL,OUTPUT);
     digitalWrite(rx5808_SEL,HIGH);
-    //pinMode(rssiPin,INPUT); 
-    
+
     // SPI pins for RX control
     pinMode (slaveSelectPin, OUTPUT);
     pinMode (spiDataPin, OUTPUT);
@@ -387,9 +368,9 @@ void setup()
     }
 #endif 
     // setup spectrum screen array
-    spectrum_init();
+//    spectrum_init();
     //screen_mode_selection();  
-    screen_band_scanner(0);
+//    screen_band_scanner(0);
 
 
     
@@ -398,11 +379,9 @@ void setup()
 } // END of setup();
 
 
-    int8_t menu=1;
 /************************************************/
 /*                 MAIN LOOP                    */
 /************************************************/
-uint16_t freq=5645;
 
 void loop() 
 {
@@ -452,8 +431,6 @@ void loop()
                 else
                 {
                     screen_band_scanner(1);                      
-                  //  TV.printPGM(10, TV_Y_OFFSET,  PSTR("  RSSI SETUP "));
-//                    TV.print(10, SCANNER_LIST_Y_POS, "RSSI Min:     RSSI Max:   ");                    
                     // prepare new setup
                     rssi_min=0;
                     rssi_max=400; // set to max range
@@ -463,8 +440,6 @@ void loop()
                 }   
                 // trigger new scan from begin
                 channel=CHANNEL_MIN;
-                writePos=SCANNER_LIST_X_POS; // reset channel list
-//                channelIndex = pgm_read_byte_near(channelList + channel);  
                 channelIndex = channelList[channel];  
                 
                 scan_start=1;
@@ -476,12 +451,10 @@ void loop()
                 if (state == STATE_MANUAL)
                 {
                     screen_manual(0,channelIndex);                  
- //                   TV.printPGM(10, TV_Y_OFFSET,  PSTR(" MANUAL MODE"));                
                 }
                 else if(state == STATE_SEEK)
                 {
                     screen_manual(1,channelIndex);  
-//                    TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE SEEK"));                
                 }
                 first_channel_marker=1;
                 update_frequency_view=1;
@@ -848,40 +821,6 @@ void loop()
         }
     }
     //rssi = readRSSI();   
- 
-    
-    
-    
-
-    
-    #if 0
-    // Dummy Testcode
-    if (state == STATE_SCAN)
-    {    
-        
-        if(freq <= 5945)
-        {        
-            spectrum_add_column (6, freq, rssi);  
-            rssi=random(0, 100);         
-    //        rssi+=3;
-            freq+=5;
-            if(rssi>100)
-            {
-                rssi=10;
-                }
-            osd_print_debug(4,3,"freq",freq);
-            osd_print_debug(15,3,"rssi",rssi);
-        }
-        else
-        {
-            freq=5645;
-            }
-    
-        spectrum_dump(6); 
-        delay(10);        
-    }
-        
-    #endif
 }
 
 
