@@ -158,6 +158,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 
 
 // Menu settings
+#define MENU_HIDE_TIMER 300 // 50 ~ 1 second
+
 #define MENU_MODE_SELECTION_X 6
 #define MENU_MODE_SELECTION_Y 2
 #define MENU_MODE_SELECTION_HEADER 3
@@ -178,6 +180,11 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define BAND_SCANNER_FREQ_MAX 5945 
 #define BAND_SCANNER_RSSI_MAX 100
 #define BAND_SCANNER_SUB_BAR 3 // a character can have values 0..3
+
+#define OSD_EXT_SYC 1
+#define OSD_INT_SYC 2
+#define OSD_OFF     0
+
 
 
 
@@ -270,6 +277,10 @@ uint16_t rssi_seek_found=0;
 uint16_t rssi_setup_run=0;
 uint8_t menu_first_entry=0;
 uint8_t video_mode=PAL;
+uint8_t menu_hide=0; // flag to hide osd
+uint16_t menu_hide_timer=MENU_HIDE_TIMER;
+uint8_t menu_no_hide=0;
+uint8_t osd_mode=0; // keep current osd mode for wakeup
 
 
 
@@ -386,6 +397,37 @@ void setup()
 void loop() 
 {
 
+    /************************/
+    /*  Menu hide handler   */
+    /************************/
+    if(menu_hide_timer==0 || menu_hide==1)
+    {
+        // turn OSD off
+        osd.control(OSD_OFF);
+        while(get_key() == KEY_NONE)
+        {
+            // wait for wakeup
+            delay(100);
+        }
+        // wakeup!
+        menu_hide_timer=MENU_HIDE_TIMER;
+        menu_hide=0;        
+        osd.control(osd_mode); // we are back
+        while(get_key() != KEY_NONE)
+        {
+            // wait for key release as debounce
+            // to avoid change by pressed key
+        }        
+        menu_hide=0;
+    }
+    else
+    {
+        if(!menu_no_hide)
+        {
+            menu_hide_timer--;
+            osd_print_debug(1,1,"hide",menu_hide_timer);
+        }
+    }
 
     /************************/
     /*   Mode Select Enty   */
@@ -393,7 +435,7 @@ void loop()
     // Special handler you must press the mode some time to get in
     if ((state != STATE_SETUP) && get_key() == KEY_MID) // key pressed ?
     {      
-                osd_print_debug(1,1,"switch_count",switch_count);(1,1,"switch_count",switch_count);
+//                 osd_print_debug(1,1,"switch_count",switch_count);(1,1,"switch_count",switch_count);
         if (switch_count > WAIT_MODE_ENTRY)
         {   
             state=STATE_MODE_SELECT;
@@ -443,7 +485,9 @@ void loop()
                 channelIndex = channelList[channel];  
                 
                 scan_start=1;
-                osd.control(2); // internal sync                
+                osd_mode=OSD_INT_SYC; // internal sync  
+                menu_no_hide=1;
+                
             break;
             case STATE_MANUAL: // manual mode 
             case STATE_SEEK: // seek mode
@@ -459,16 +503,20 @@ void loop()
                 first_channel_marker=1;
                 update_frequency_view=1;
                 force_seek=1;
-                osd.control(1); // external sync                    
+                osd_mode=OSD_EXT_SYC; // external sync   
+                menu_no_hide=0;                
             break;
             case STATE_SETUP:
-                osd.control(2); // internal sync                  
+                osd_mode=OSD_INT_SYC; // internal sync                  
                 screen_setup();    
+                menu_no_hide=1;
             break;
             case STATE_MODE_SELECT:
-                osd.control(2); // internal sync                  
-                screen_mode_selection();     
-            break;            
+                osd_mode=OSD_INT_SYC; // internal sync                  
+                screen_mode_selection(); 
+                menu_no_hide=1;                
+            break;    
+            osd.control(osd_mode);
         } // end switch
         last_state=state;
     }
@@ -524,12 +572,14 @@ void loop()
                 if ((!force_seek) && (rssi > RSSI_SEEK_TRESHOLD)) // check for found channel
                 {
                     seek_found=1; 
+                    menu_no_hide=0;
                     // beep twice as notice of lock
                     // PRINT LOCK
                 } 
                 else 
                 { // seeking itself
                     force_seek=0;
+                    menu_no_hide=1; // prevent hide on search
                     // next channel
                     if (channel < CHANNEL_MAX) 
                     {
@@ -545,10 +595,14 @@ void loop()
             else
             { // seek was successful            
 //                TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE LOCK")); 
+                osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     AUTO MODE LOCK      \x02");
+
                 if (get_key() == KEY_UP) // restart seek if key pressed
                 {              
                     force_seek=1;
                     seek_found=0; 
+                    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     AUTO MODE SEEK      \x02");
+                    
 //                    TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE SEEK"));        
                 }                
             }
@@ -1556,7 +1610,8 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     }
     else
     {
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02          SEEK           \x02");
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     AUTO MODE SEEK      \x02");
+        
     }    
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
 //    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
@@ -1644,6 +1699,12 @@ uint8_t get_key (void)
             delay(1);
         }
     }
+    // reset hide timer, on any key
+    if(current_key != KEY_NONE)
+    {
+        menu_hide_timer=MENU_HIDE_TIMER;
+    }
+    
     return(current_key);
 }
 
