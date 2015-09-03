@@ -28,7 +28,7 @@ void SPI::mode(byte config)
 
   // enable SPI master with configuration byte specified
   SPCR = 0;
-  SPCR = (config & 0x7F) | (1<<SPE) | (1<<MSTR);
+  SPCR = (config & 0x7F) | (1<<SPE) | (1<<MSTR) | (1<<SPR1) | (1<<SPR0); // /16
   tmp = SPSR;
   tmp = SPDR;
 }

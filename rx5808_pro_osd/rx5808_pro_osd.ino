@@ -244,7 +244,7 @@ const uint8_t channelSymbol[] PROGMEM = {
 
 // All Channels of the above List ordered by Mhz
 const uint8_t channelList[] PROGMEM = {
-  19, 18, 17, 16, 7, 8, 24, 6, 9, 25, 5, 10, 26, 4, 11, 27, 3, 12, 28, 2, 13, 29, 1, 14, 30, 0, 15, 31, 20, 21, 22, 23
+  19, 18, 17, 16, 7, 8, 24, 6, 9, 25, 5, 10, 26, 4, 11, 27, 3, 12, 28, 2, 13, 29, 1, 14, 30, 0, 15, 31, 20, 21, 22, 23, 33,34,35,36,37,38,39,40
 };
 
 
@@ -354,9 +354,13 @@ void setup()
     pinMode (spiDataPin, OUTPUT);
 	pinMode (spiClockPin, OUTPUT);
     
-    
-
- 
+#if 0    
+    while(1)
+    {
+        setChannelModule(1);
+        delay(200);
+    }
+#endif 
     // setup spectrum screen array
     spectrum_init();
     //screen_mode_selection();  
@@ -870,20 +874,48 @@ void spi_32_transfer(uint32_t value)
 {
     uint8_t* buffer = (uint8_t*) &value; // for simple byte access
     
-    Spi.mode((1<<DORD));  // set to SPI LSB first mode  
+    Spi.mode((1<<DORD) | (1<<SPR1) | (1<<SPR0));  // set to SPI LSB first mode  and to 1/64 speed
+    
     digitalWrite(rx5808_SEL,LOW); // select
+    delayMicroseconds(1); 
+    
     Spi.transfer(*(buffer + 0)); // byte 0
+    
+    digitalWrite(rx5808_SEL,HIGH); // transfer done
+    delayMicroseconds(1); 
+    
+    digitalWrite(rx5808_SEL,LOW); // select    
+    delayMicroseconds(1); 
+    
     Spi.transfer(*(buffer + 1)); // byte 1
+    
+    digitalWrite(rx5808_SEL,HIGH); // transfer done
+    delayMicroseconds(1);     
+    
+    digitalWrite(rx5808_SEL,LOW); // select
+    delayMicroseconds(1); 
+    
     Spi.transfer(*(buffer + 2)); // byte 2
+
+    digitalWrite(rx5808_SEL,HIGH); // transfer done
+    delayMicroseconds(1); 
+    
+    digitalWrite(rx5808_SEL,LOW); // select
+    delayMicroseconds(1); 
+    
     Spi.transfer(*(buffer + 3)); // byte 3
     digitalWrite(rx5808_SEL,HIGH); // transfer done
+    delayMicroseconds(1);     
     Spi.mode(0);  // set SPI mode back to MSB first (used by OSD)
+   
+#if 0   
   //buffer32=0xaabbccdd;
+  //debug_x (10, 1, "CH", value);  
   osd_print_debug_x (1, 1, "val0", *(buffer + 0));
   osd_print_debug_x (1, 2, "val1", *(buffer + 1));
   osd_print_debug_x (1, 3, "val2", *(buffer + 2));
   osd_print_debug_x (1, 4, "val3", *(buffer + 3));
-
+#endif
     
     
 }
@@ -894,6 +926,7 @@ void setChannelModule__(uint8_t channel)
   uint8_t i;
   uint16_t channelData;
   channelData = pgm_read_word_near(channelTable + channel);
+  //osd_print_debug_x (10, 1, "CH", channelData);  
   uint32_t buffer32=0;
   uint8_t address = 0;
   uint32_t data = 0;
@@ -960,6 +993,7 @@ void setChannelModule__(uint8_t channel)
   buffer32=0; //  init buffer to 0
   buffer32=((data & 0xfffff) << 12 ) | ((write & 1)<<11) | ((address & 0xf) <<7);
   spi_32_transfer(buffer32);
+  delay(200);
 }
 
 
