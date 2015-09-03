@@ -537,19 +537,8 @@ void loop()
                     } else {
                         channel=CHANNEL_MIN;
                     }    
-                    channelIndex = pgm_read_byte_near(channelList + channel);     
-                    // set correct values by replace some characters (simple code)
-                    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");                    
-                    // BAND
-                    osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+8,4,pgm_read_byte_near(bandNames + channelIndex));  
-                    // ACTIVE CHANNEL
-                    uint8_t active_channel = channelIndex%CHANNEL_BAND_SIZE; // get channel inside band
-                    char active=0x18 + active_channel;
-                    osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+11+(2*active_channel),4,active);  
-                    // FREQUENCY
-                    osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+8,5,pgm_read_word_near(channelFreqTable + channelIndex));
-
-                    
+                    channelIndex = pgm_read_byte_near(channelList + channel);                         
+                    screen_manual_data(channelIndex); // update data on screen
                 }        
             }
             else
@@ -1547,13 +1536,44 @@ void screen_band_scanner(uint8_t mode)
     spectrum_dump(6);    
 }
 
+void screen_manual_data(uint8_t channelIndex)
+{
+    // clear last line
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
+    // set correct values by replace some characters (simple code)
+    // BAND
+    osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+8,4,pgm_read_byte_near(bandNames + channelIndex));  
+    // ACTIVE CHANNEL
+    uint8_t active_channel = channelIndex%CHANNEL_BAND_SIZE; // get channel inside band
+    char active=0x18 + active_channel;
+    osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+11+(2*active_channel),4,active);  
+    // FREQUENCY
+    osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+8,5,pgm_read_word_near(channelFreqTable + channelIndex));
+    // add marker for all channel per active band
+    // set available channels marker
+    // clear symbol line
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX,"                        ");
+    uint8_t loop=0;
+    for(loop=0;loop<8;loop++)
+    {
+        uint8_t band_number=pgm_read_byte_near(bandNumber + channelIndex);
+        uint8_t channel=(band_number*8 + loop);
+        uint16_t frequency=pgm_read_word_near(channelFreqTable + channel);
+        // calculate x postion (see code of spectrm_add_column for details)
+        uint16_t frequency_delta=(frequency-BAND_SCANNER_FREQ_MIN); // no rouding issue
+        uint16_t frequency_per_char=((BAND_SCANNER_FREQ_MAX-BAND_SCANNER_FREQ_MIN)*INTEGER_GAIN)/((BAND_SCANNER_SPECTRUM_X_MAX-1)*2);
+        uint8_t x_pos_54= (frequency_delta*(INTEGER_GAIN+ROUND_CORRECTION)) / frequency_per_char;
+        uint8_t x=((x_pos_54)/2); // final down scale to single character
+        // print marker
+        osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+x,SCREEN_Y_MAX,pgm_read_byte_near(channelSymbol + channel));
+    }
+
+}
+
 // Manual settings screen
 void screen_manual(uint8_t mode, uint8_t channelIndex)
 {
-    uint8_t y=1;
-//    String buffer; // for dynamic output
-    char buffer[31]; // for dynamic output
-    char value; // for character insertion
+
     // mode
     // 0: manual
     // 1: seek
@@ -1569,38 +1589,15 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
         osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02          SEEK           \x02");
     }    
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
+//    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,5,"\x02 FREQ: ???? GHz          \x02");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,6,"\x02 RSSI:\x83\x87\x87\x87\x87\x87\x84\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x89\x02");    
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,7,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");        
 
-    // set correct values by replace some characters (simple code)
-    // BAND
-    osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+8,4,pgm_read_byte_near(bandNames + channelIndex));  
-    // ACTIVE CHANNEL
-    uint8_t active_channel = channelIndex%CHANNEL_BAND_SIZE; // get channel inside band
-    char active=0x18 + active_channel;
-    osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+11+(2*active_channel),4,active);  
-    // FREQUENCY
-    osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+8,5,pgm_read_word_near(channelFreqTable + channelIndex));
-    // add marker for all channel per active band
-    // set available channels marker
-    uint8_t loop=0;
-    for(loop=0;loop<8;loop++)
-    {
-        uint8_t band_number=pgm_read_byte_near(bandNumber + channelIndex);
-        uint8_t channel=(band_number*8 + loop);
-        uint16_t frequency=pgm_read_word_near(channelFreqTable + channel);
-        // calculate x postion (see code of spectrm_add_column for details)
-        uint16_t frequency_delta=(frequency-BAND_SCANNER_FREQ_MIN); // no rouding issue
-        uint16_t frequency_per_char=((BAND_SCANNER_FREQ_MAX-BAND_SCANNER_FREQ_MIN)*INTEGER_GAIN)/((BAND_SCANNER_SPECTRUM_X_MAX-1)*2);
-        uint8_t x_pos_54= (frequency_delta*(INTEGER_GAIN+ROUND_CORRECTION)) / frequency_per_char;
-        uint8_t x=((x_pos_54)/2); // final down scale to single character
-        // print marker
-        osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+x,SCREEN_Y_MAX,pgm_read_byte_near(channelSymbol + channel));
-    }
+    // fill in data
+    screen_manual_data(channelIndex);
     // add spectrum of current channel
     //spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), random(0, 100));
     spectrum_dump(3);    
