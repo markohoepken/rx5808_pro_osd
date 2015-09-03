@@ -616,7 +616,8 @@ void loop()
                     EEPROM.write(EEPROM_ADR_RSSI_MAX_L,(rssi_max & 0xff));
                     EEPROM.write(EEPROM_ADR_RSSI_MAX_H,(rssi_max >> 8));                    
                     state=EEPROM.read(EEPROM_ADR_STATE);
-                    //beep(1000);
+                    osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), " Settings saved..");
+                    delay(1000);
                 }
                 else // update screen
                 { 
@@ -997,7 +998,7 @@ void setChannelModule(uint8_t channel)
   //channelData = channelTable[channel];
   channelData = pgm_read_word_near(channelTable + channel);
 
-  osd_print_debug_x (1, 1, "TUNE:", channelData);  
+//   osd_print_debug_x (1, 1, "TUNE:", channelData);  
   SPCR = 0; // release SPI 
   SERIAL_ENABLE_HIGH();
   //delay(500);  
