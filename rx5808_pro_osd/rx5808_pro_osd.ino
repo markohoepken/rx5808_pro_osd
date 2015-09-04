@@ -1311,9 +1311,69 @@ void screen_setup(void)
 /*   BAND SCANNER   */
 /*******************/
 
+
+// special wrapper that makes 3 columns out of 1.
+// reason:
+//
+// We have 40 channels, but 54 colums. Due to rounding and freqencies, some columns
+// are never used. This looks like "gaps" in the spectrum
+// Technical one channel has anyway a board sepctrum.
+// Therfore instead of adding ONE colum, we do 3
+// 1. center 
+// 2. left 50%
+// 3. right50%
+//   #
+//   #
+//  ###
+//  ###
+//  LCR
+// At the end, the spectrum looks "nice".
+// The "real" center line has correct value.
+
+
+void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi)
+{
+    // check x-position first
+    // X POSTION HANDLING (range of array 0..26 = 27 positions)
+    uint8_t upper=0; // marker for upper or lower sub colum in charcter
+    // calculate column position of 54 columns    
+    // Note: calculation done on runtime, since preprocessor seems to have issues with forumlars
+    // simple interger with 10x factor and /10 at end
+    #define INTEGER_GAIN 100
+    uint16_t frequency_delta=(frequency-BAND_SCANNER_FREQ_MIN); // no rouding issue
+    uint16_t frequency_per_char=((BAND_SCANNER_FREQ_MAX-BAND_SCANNER_FREQ_MIN)*INTEGER_GAIN)/((BAND_SCANNER_SPECTRUM_X_MAX-1)*2);
+    // special rounding is required, since lowest in on left side, highest on right sight of character
+    #define ROUND_CORRECTION 2 // stretches band a little
+    uint8_t x_pos_54= (frequency_delta*(INTEGER_GAIN+ROUND_CORRECTION)) / frequency_per_char;
+    // find right column of 27 characters
+    uint8_t x=((x_pos_54)/2); // final down scale to single character
+
+    #define SPECTURM_BANDWITH 7
+    #define SPECTURM_SIDE_FACTOR 0.7
+    #define SPECTURM_SIDE_FACTOR2 0.5
+    
+    if(frequency > BAND_SCANNER_FREQ_MIN+SPECTURM_BANDWITH) // skip first
+    {
+        //spectrum_add_column_single (scale, frequency-SPECTURM_BANDWITH, rssi*SPECTURM_SIDE_FACTOR,0); // center   
+    }
+    //spectrum_add_column_single (scale, frequency+SPECTURM_BANDWITH, rssi); // right
+    spectrum_add_column_single (scale, frequency, rssi,1); // center
+    //spectrum_add_column_single (scale, frequency+SPECTURM_BANDWITH, rssi); // right
+   
+    if(frequency < BAND_SCANNER_FREQ_MAX-SPECTURM_BANDWITH) // skip first
+    {
+        spectrum_add_column_single (scale, frequency+SPECTURM_BANDWITH, rssi*SPECTURM_SIDE_FACTOR,0); // center
+    }           
+    if(frequency < BAND_SCANNER_FREQ_MAX-2*SPECTURM_BANDWITH) // skip first
+    {
+        spectrum_add_column_single (scale, frequency+2*SPECTURM_BANDWITH, rssi*SPECTURM_SIDE_FACTOR2,0); // center
+    }     
+    
+}
+
 // add one spectrum line in spectrum buffer
 // this function does all the colum calcuation with rounding
-void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi)
+void spectrum_add_column_single (uint8_t scale, uint16_t frequency, uint8_t rssi, uint8_t marker)
 {
     if(rssi>100)
     {
@@ -1345,18 +1405,20 @@ void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi)
     {
         upper=1;
     }
-    // set arrow at current frequency
-    char arrow_string[]="                           "; // clear line
-    if(upper){
-        arrow_string[x]=0x81; // insert arrow
-    }
-    else
+    if(marker)
     {
-        arrow_string[x]=0x82; // insert arrow
+        // set arrow at current frequency
+        char arrow_string[]="                           "; // clear line
+        if(upper){
+            arrow_string[x]=0x81; // insert arrow
+        }
+        else
+        {
+            arrow_string[x]=0x82; // insert arrow
+        }
+        // print arrow line
+        osd_print (BAND_SCANNER_SPECTRUM_X_MIN, BAND_SCANNER_SPECTRUM_Y_MIN,arrow_string );
     }
-    // print arrow line
-    osd_print (BAND_SCANNER_SPECTRUM_X_MIN, BAND_SCANNER_SPECTRUM_Y_MIN,arrow_string );
-    
     // Y SCALING
     //
     uint8_t y=0;
