@@ -100,6 +100,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define rssiPin A1   // Depands on patch of minimOSD
 #define rx5808_SEL 5 // Depands on patch of minimOSD
 
+#define POWER_SENSE A0
+#define POWER_SCALE 14.75 // divider 1.5K 22K
+
 #define spiDataPin 11
 #define slaveSelectPin 5
 #define spiClockPin 13
@@ -866,6 +869,10 @@ void loop()
 //          beep(UP_BEEP);
         }
     }
+    // update Power display
+    show_power(3,2);
+    
+    
     //rssi = readRSSI();   
 }
 
@@ -1219,6 +1226,16 @@ void wait_rssi_ready()
     }
 }
       
+void show_power(uint8_t x, uint8_t y)
+{
+    uint16_t sensorValue = analogRead(POWER_SENSE);
+  // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 5V):    
+    float voltage = sensorValue * (5 / 1023.0) * POWER_SCALE;
+    osd.setPanel(x-1,y-1);  
+    osd.openPanel();
+    osd.printf("%c%2.1f",0xd0,voltage); 
+    osd.closePanel();
+}
 
 
 uint16_t readRSSI() 
@@ -1291,6 +1308,7 @@ void osd_print_int (uint8_t x, uint8_t y, uint16_t value)
     osd.printf("%d",value); 
     osd.closePanel(); 
 }
+
 void osd_print_char (uint8_t x, uint8_t y, char value)
 {
     osd.setPanel(x-1,y-1);  
