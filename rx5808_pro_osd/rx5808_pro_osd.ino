@@ -180,6 +180,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define BAND_SCANNER_FREQ_MAX 5945 
 #define BAND_SCANNER_RSSI_MAX 100
 #define BAND_SCANNER_SUB_BAR 3 // a character can have values 0..3
+#define RSSI_SUB_BAR 3 // a character can have values 0..3
+
 
 #define OSD_EXT_SYC 1
 #define OSD_INT_SYC 2
@@ -559,7 +561,8 @@ void loop()
         // add spectrum of current channel
         spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), rssi);
         spectrum_dump(3);    
-        
+        // RSSI bar
+        draw_rssi_bar(9, 6, 17, rssi);
       
         // handling for seek mode after screen and RSSI has been fully processed
         if(state == STATE_SEEK) //
@@ -1155,6 +1158,52 @@ uint8_t channel_from_index(uint8_t channelIndex)
 }    
 
 
+void draw_rssi_bar(uint8_t xpos, uint8_t ypos, uint8_t scale, uint8_t rssi)
+{
+    uint8_t x=0;
+    uint8_t x_step= BAND_SCANNER_RSSI_MAX/scale;
+    uint8_t x_step_fractional= BAND_SCANNER_RSSI_MAX/scale/RSSI_SUB_BAR;
+    uint8_t x_max_100=0; // keeps last y with 100%
+    
+    // NOT USED
+    uint8_t x_fill=0; // marker to fill top of comum with 0
+    // set all 100% sub bars
+#if 0    
+    osd_print_debug(1,2,"x_step",x_step);
+    osd_print_debug(1,3,"x_step_fractional",x_step_fractional);
+    //osd_print_debug(1,4,"xpos",x);    
+#endif  
+    uint8_t value=0;
+  
+    // left corner
+    osd_print_char(xpos,ypos,0x83); // left
+    for(x=1; x<=scale;x++) // 1...scale
+    {
+        if(x*x_step < rssi)
+        {
+            osd_print_char(xpos+x,ypos,0x87); // 100% bar
+
+            x_max_100=x;
+        }
+        else
+        { // fractional rest
+            if(x_fill==0)
+            {
+                // handle fractional values on top of bar and beyond
+                uint8_t rssi_fraction= rssi-(x_max_100*x_step);
+                uint8_t bar_value= rssi_fraction/ x_step_fractional;
+                osd_print_char(xpos+x,ypos,0x84+bar_value); // fractional bars
+                x_fill=1; // fill rest with "0"
+            }
+            else
+            {
+                osd_print_char(xpos+x,ypos,0x88); // 0% bar
+            }
+        }
+    }
+    osd_print_char(xpos+scale+1,ypos,0x89); // rigth
+}
+
 void wait_rssi_ready()
 {
     // CHECK FOR MINIMUM DELAY
@@ -1360,11 +1409,11 @@ void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi)
     spectrum_add_column_single (scale, frequency, rssi,1); // center
     //spectrum_add_column_single (scale, frequency+SPECTURM_BANDWITH, rssi); // right
    
-    if(frequency < BAND_SCANNER_FREQ_MAX-SPECTURM_BANDWITH) // skip first
+    if(frequency < BAND_SCANNER_FREQ_MAX-SPECTURM_BANDWITH) // next right
     {
         spectrum_add_column_single (scale, frequency+SPECTURM_BANDWITH, rssi*SPECTURM_SIDE_FACTOR,0); // center
     }           
-    if(frequency < BAND_SCANNER_FREQ_MAX-2*SPECTURM_BANDWITH) // skip first
+    if(frequency < BAND_SCANNER_FREQ_MAX-2*SPECTURM_BANDWITH) // over next right
     {
         spectrum_add_column_single (scale, frequency+2*SPECTURM_BANDWITH, rssi*SPECTURM_SIDE_FACTOR2,0); // center
     }     
@@ -1668,7 +1717,6 @@ void screen_manual_data(uint8_t channelIndex)
         // print marker
         osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+x,SCREEN_Y_MAX,pgm_read_byte_near(channelSymbol + channel));
     }
-
 }
 
 // Manual settings screen
@@ -1693,7 +1741,7 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
 //    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,5,"\x02 FREQ: ???? GHz          \x02");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,6,"\x02 RSSI:\x83\x87\x87\x87\x87\x87\x84\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x89\x02");    
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,6,"\x02 RSSI:\x83\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x89\x02");    
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,7,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");        
