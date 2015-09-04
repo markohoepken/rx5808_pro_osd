@@ -1667,7 +1667,7 @@ void set_cursor(uint8_t x_offset, uint8_t y_offset, uint8_t entry, uint8_t pos)
             }
         }
 }
-// debounce wrapper
+// debounce wrapper for keys
 uint8_t get_key (void)
 {   
     // waits until value is stable for KEY_DEBOUNCE loops
@@ -1700,7 +1700,7 @@ uint8_t get_key (void)
     return(current_key);
 }
 
-// no debounce
+// no debounce get key function
 uint8_t get_key_raw (void)
 {   
     uint8_t sw_dir_a2b = 0;
