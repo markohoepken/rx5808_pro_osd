@@ -591,13 +591,13 @@ void loop()
             }
             else
             { // seek was successful            
-                osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     AUTO MODE LOCK      \x02");
+                osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  AUTO MODE LOCK");
 
                 if (get_key() == KEY_UP) // restart seek if key pressed
                 {              
                     force_seek=1;
                     seek_found=0; 
-                    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     AUTO MODE SEEK      \x02");      
+                    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  AUTO MODE SEEK");      
                 }                
             }
         }        
@@ -847,7 +847,7 @@ void loop()
     if(!power_update_delay--)
     {
         power_update_delay=POWER_UPDATE_RATE;
-        show_power(3,2);
+        show_power(23,2);
     } 
 }
 
@@ -1305,48 +1305,6 @@ void osd_print_debug_x (uint8_t x, uint8_t y, char string[30], uint16_t value)
     osd.closePanel(); 
 }
 
-/*******************/
-/*   MODE SCREEN   */
-/*******************/
-void screen_mode_selection(void)
-{
-    uint8_t y=MENU_MODE_SELECTION_Y;
-    osd.clear();
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02 MODE SELECTION \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  EXIT          \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  AUTO SEARCH   \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  BAND SCANNER  \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  MANUEL MODE   \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  SETUP         \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
-}
-
-// Setup screen
-void screen_setup(void)
-{
-    uint8_t y=MENU_SETUP_Y;
-    osd.clear();
-    osd_print(MENU_SETUP_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
-    osd_print(MENU_SETUP_X,y++,"\x02       SETUP     \x02");
-    osd_print(MENU_SETUP_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
-    osd_print(MENU_SETUP_X,y++,"\x02  EXIT           \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  SAVE SETTINGS  \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  VIDEO :        \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  RSSI CALIBRATE \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  FONT UPLOAD    \x02");
-    osd_print(MENU_SETUP_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");   
-    // video mode handler
-    if(video_mode== NTSC){
-        osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"NTSC");
-    }
-    else
-    {
-         osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"PAL ");       
-    }
-}
-
 
 /*******************/
 /*   BAND SCANNER   */
@@ -1654,30 +1612,6 @@ void spectrum_dump (uint8_t height)
     }
 }
 
-// Band scanner screen
-void screen_band_scanner(uint8_t mode)
-{
-    //  mode
-    // 0 : scanner
-    // 1 : RSSI calibration
-    osd.clear();
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
-    if(mode==0)
-    {
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       BAND SCANNER      \x02");    
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
-    }
-    else
-    {
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     RSSI CALIBRATION    \x02");        
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x02Run:?? MIN:???   MAX:??? \x02");        
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
-        }
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
-    spectrum_dump(6);    
-}
-
 void screen_manual_data(uint8_t channelIndex)
 {
     // clear last line
@@ -1711,6 +1645,79 @@ void screen_manual_data(uint8_t channelIndex)
     }
 }
 
+///////////////////////////////////////
+//  SCREENS
+///////////////////////////////////////
+
+
+/*******************/
+/*   MODE SCREEN   */
+/*******************/
+void screen_mode_selection(void)
+{
+    uint8_t y=MENU_MODE_SELECTION_Y;
+    osd.clear();
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02 MODE SELECTION \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  EXIT          \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  AUTO SEARCH   \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  BAND SCANNER  \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  MANUEL MODE   \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  SETUP         \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+}
+
+// Setup screen
+void screen_setup(void)
+{
+    uint8_t y=MENU_SETUP_Y;
+    osd.clear();
+    osd_print(MENU_SETUP_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print(MENU_SETUP_X,y++,"\x02       SETUP     \x02");
+    osd_print(MENU_SETUP_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
+    osd_print(MENU_SETUP_X,y++,"\x02  EXIT           \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  SAVE SETTINGS  \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  VIDEO :        \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  RSSI CALIBRATE \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  FONT UPLOAD    \x02");
+    osd_print(MENU_SETUP_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");   
+    // video mode handler
+    if(video_mode== NTSC){
+        osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"NTSC");
+    }
+    else
+    {
+         osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"PAL ");       
+    }
+}
+
+
+// Band scanner screen
+void screen_band_scanner(uint8_t mode)
+{
+    //  mode
+    // 0 : scanner
+    // 1 : RSSI calibration
+    osd.clear();
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    if(mode==0)
+    {
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02   BAND SCANNER     \xd0 0.0\x02");    
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+    }
+    else
+    {
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     RSSI CALIBRATION    \x02");        
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x02Run:?? MIN:???   MAX:??? \x02");        
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+        }
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
+    spectrum_dump(6); 
+    show_power(23,2);
+}
+
 // Manual settings screen
 void screen_manual(uint8_t mode, uint8_t channelIndex)
 {
@@ -1722,16 +1729,16 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     // static default text
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
     if(mode == 0)
-    {
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02          MANUAL         \x02");
+    {    
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       MANUAL       \xd0 0.0\x02");
     }
     else
-    {
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     AUTO MODE SEEK      \x02");
-        
+    {    
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  AUTO MODE SEEK    \xd0 0.0\x02");   
     }    
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
-//    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
+    // CHAN comes from update function
+    //    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,5,"\x02 FREQ: ???? GHz          \x02");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,6,"\x02 RSSI:\x83\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x89\x02");    
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,7,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
@@ -1743,13 +1750,8 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     // add spectrum of current channel
     //spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), random(0, 100));
     spectrum_dump(3);    
-    
+    show_power(23,2);
 }
-
-
-
-
-
 // cursor handling for menue
 void set_cursor(uint8_t x_offset, uint8_t y_offset, uint8_t entry, uint8_t pos)
 {
