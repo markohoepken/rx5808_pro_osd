@@ -668,7 +668,7 @@ void loop()
             }            
         }    
         // Hold function
-        if (get_key() == KEY_UP)
+        if ((state == STATE_SCAN) && (get_key() == KEY_UP))
         {   
             // pause
             osd_print (3,2, "HOLD BAND SCANNER");
