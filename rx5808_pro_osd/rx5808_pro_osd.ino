@@ -86,8 +86,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 //#define ArduCAM328
 #define MinimOSD
 
-#define TELEMETRY_SPEED  57600  // How fast our MAVLink telemetry is coming to Serial port
-#define BOOTTIME         2000   // Time in milliseconds that we show boot loading bar and wait user input
+#define TELEMETRY_SPEED  57600  // Serial speed for key map update
 
 // switches
 #define KEY_A 0 // RX
@@ -103,6 +102,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 // #define POWER_SENSE A0 difficult to solder
 #define POWER_SENSE A2 // easier to solder
 #define POWER_SCALE 14.75 // divider 1.5K 22K
+#define POWER_UPDATE_RATE 20 // how ofter power is updated (loops)
 
 #define spiDataPin 11
 #define slaveSelectPin 5
@@ -111,7 +111,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 // key debounce delay in ms
 // NOTE: good values are in the range of 100-200ms
 // shorter values will make it more reactive, but may lead to double trigger
-#define KEY_DEBOUNCE 30 // debounce in ms
+#define KEY_DEBOUNCE 5 // debounce in ms
 
 // Set you TV format (PAL = Europe = 50Hz, NTSC = INT = 60Hz)
 //#define TV_FORMAT NTSC
@@ -126,7 +126,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 // 80% under max value for RSSI 
 #define RSSI_SEEK_TRESHOLD 80
 // scan loops for setup run
-#define RSSI_SETUP_RUN 10
+#define RSSI_SETUP_RUN 5
 
 #define STATE_SEEK_FOUND 0
 #define STATE_SEEK 1
@@ -185,6 +185,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define BAND_SCANNER_RSSI_MAX 100
 #define BAND_SCANNER_SUB_BAR 3 // a character can have values 0..3
 #define RSSI_SUB_BAR 3 // a character can have values 0..3
+#define MIN_TUNE_TIME 30 // tune time for rssi
 
 
 #define OSD_EXT_SYC 1
@@ -243,7 +244,6 @@ const uint8_t channelSymbol[] PROGMEM = {
 };
 
 // All Channels of the above List ordered by Mhz
-
 //  dynamic arry that keeps the channel ID sorted by frequence for seqeunce scan
 uint8_t channelList[CHANNEL_MAX_INDEX+1]={};
 //const uint8_t channelList[] PROGMEM = {
@@ -267,8 +267,6 @@ uint8_t force_seek=0;
 unsigned long time_of_tune = 0;        // will store last time when tuner was changed
 uint8_t last_maker_pos=0;
 uint8_t last_active_channel=0;
-uint8_t first_channel_marker=1;
-uint8_t update_frequency_view=0;
 uint8_t seek_found=0;
 uint8_t last_dip_channel=255;
 uint8_t last_dip_band=255;
@@ -287,7 +285,7 @@ uint8_t menu_hide=0; // flag to hide osd
 uint16_t menu_hide_timer=MENU_HIDE_TIMER;
 uint8_t menu_no_hide=0;
 uint8_t osd_mode=0; // keep current osd mode for wakeup
-
+uint8_t power_update_delay=POWER_UPDATE_RATE;
 
 
 /*
@@ -506,8 +504,6 @@ void loop()
                 {
                     screen_manual(1,channelIndex);  
                 }
-                first_channel_marker=1;
-                update_frequency_view=1;
                 force_seek=1;
                 osd_mode=OSD_EXT_SYC; // external sync   
                 menu_no_hide=0;                
@@ -571,17 +567,12 @@ void loop()
         // handling for seek mode after screen and RSSI has been fully processed
         if(state == STATE_SEEK) //
         { // SEEK MODE
-        
-        
-        
             if(!seek_found) // search if not found
             {
                 if ((!force_seek) && (rssi > RSSI_SEEK_TRESHOLD)) // check for found channel
                 {
                     seek_found=1; 
-                    menu_no_hide=0;
-                    // beep twice as notice of lock
-                    // PRINT LOCK
+                    menu_no_hide=0;  // found, screen may be turned off
                 } 
                 else 
                 { // seeking itself
@@ -593,24 +584,20 @@ void loop()
                         channel++;
                     } else {
                         channel=CHANNEL_MIN;
-                    }    
-                    //channelIndex = pgm_read_byte_near(channelList + channel);   
+                    }      
                     channelIndex = channelList[channel];                      
                     screen_manual_data(channelIndex); // update data on screen
                 }        
             }
             else
             { // seek was successful            
-//                TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE LOCK")); 
                 osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     AUTO MODE LOCK      \x02");
 
                 if (get_key() == KEY_UP) // restart seek if key pressed
                 {              
                     force_seek=1;
                     seek_found=0; 
-                    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     AUTO MODE SEEK      \x02");
-                    
-//                    TV.printPGM(10, TV_Y_OFFSET,  PSTR("AUTO MODE SEEK"));        
+                    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     AUTO MODE SEEK      \x02");      
                 }                
             }
         }        
@@ -640,7 +627,7 @@ void loop()
         {
             if (rssi > RSSI_SEEK_TRESHOLD) 
             {
-                // names of found channels                
+                // names of potential found channels                
             }            
         }       
         // next channel
@@ -679,13 +666,11 @@ void loop()
         // new scan possible by press scan
         if (get_key() == KEY_UP) // force new full new scan
         {   
-            last_state=255; // force redraw by fake state change ;-)
+            force_menu_redraw=1;
             channel=CHANNEL_MIN;
-//            writePos=SCANNER_LIST_X_POS; // reset channel list
             scan_start=1;
         }            
-        // update index after channel change
-        //channelIndex = pgm_read_byte_near(channelList + channel);     
+        // update index after channel change   
         channelIndex = channelList[channel];          
     }
     else if (state == STATE_MODE_SELECT) 
@@ -833,7 +818,6 @@ void loop()
                         EEPROM.write(EEPROM_VIDEO_MODE,video_mode);
                         osd_print (MENU_SETUP_X-2, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "* Saved, needs restart!");
                         delay(1000);
-                        //osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "                      ");
                         // wait key released
                         while(get_key() == KEY_UP);
                     break;
@@ -858,23 +842,13 @@ void loop()
         last_channel_index=channelIndex;
         // keep time of tune to make sure that RSSI is stable when required
         time_of_tune=millis();
-        // give 3 beeps when tuned to give feedback of correct start
-        if(first_tune)
-        {
-//          first_tune=0;
-//          #define UP_BEEP 100
-//          beep(UP_BEEP);
-//          delay(UP_BEEP);
-//          beep(UP_BEEP);
-//          delay(UP_BEEP);
-//          beep(UP_BEEP);
-        }
     }
     // update Power display
-    show_power(3,2);
-    
-    
-    //rssi = readRSSI();   
+    if(!power_update_delay--)
+    {
+        power_update_delay=POWER_UPDATE_RATE;
+        show_power(3,2);
+    } 
 }
 
 
@@ -932,7 +906,7 @@ void spi_32_transfer(uint32_t value)
     
 }
 
-// driver RX module
+// driver RX module with SPI hardmacro. NOT WORKING YES
 void setChannelModule__(uint8_t channel) 
 {
   uint8_t i;
@@ -1219,7 +1193,6 @@ void wait_rssi_ready()
     uint16_t tune_time = millis()-time_of_tune;
     // module need >20ms to tune.
     // 30 ms will to a 32 channel scan in 1 second.
-    #define MIN_TUNE_TIME 30
     if(tune_time < MIN_TUNE_TIME)
     {
         // wait until tune time is full filled
@@ -1906,7 +1879,6 @@ void uploadFont()
     
     delay(1000);
 
-    #define TELEMETRY_SPEED  57600 
     Serial.begin(TELEMETRY_SPEED);    
     Serial.println(""); // CR
     Serial.println("Ready for Font upload");
