@@ -111,7 +111,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 // key debounce delay in ms
 // NOTE: good values are in the range of 100-200ms
 // shorter values will make it more reactive, but may lead to double trigger
-#define KEY_DEBOUNCE 5 // debounce in ms
+#define KEY_DEBOUNCE 20 // debounce in ms
 
 // Set you TV format (PAL = Europe = 50Hz, NTSC = INT = 60Hz)
 //#define TV_FORMAT NTSC
@@ -541,7 +541,6 @@ void loop()
                 {  
                     channelIndex = CHANNEL_MIN_INDEX;
                 } 
-                force_menu_redraw=1; // show changes
             }
             if( get_key() == KEY_DOWN) // channel DOWN
             {
@@ -550,7 +549,6 @@ void loop()
                 {  
                     channelIndex = CHANNEL_MAX_INDEX;
                 }    
-                force_menu_redraw=1; // show changes
             }            
         }
     
@@ -563,7 +561,7 @@ void loop()
         spectrum_dump(3);    
         // RSSI bar
         draw_rssi_bar(9, 6, 17, rssi);
-      
+        screen_manual_data(channelIndex);
         // handling for seek mode after screen and RSSI has been fully processed
         if(state == STATE_SEEK) //
         { // SEEK MODE
@@ -1626,7 +1624,7 @@ void screen_manual_data(uint8_t channelIndex)
     // add marker for all channel per active band
     // set available channels marker
     // clear symbol line
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX,"                        ");
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX,"                              ");
     uint8_t loop=0;
     for(loop=0;loop<8;loop++)
     {
@@ -1727,12 +1725,13 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
     if(mode == 0)
     {    
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       MANUAL       \xd0 0.0\x02");
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       MANUAL            \x02");     
     }
     else
     {    
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  AUTO MODE SEEK    \xd0 0.0\x02");   
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  AUTO MODE SEEK         \x02");   
     }    
+    show_power(23,2);   
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
     // CHAN comes from update function
     //    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
@@ -1746,7 +1745,6 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     // add spectrum of current channel
     //spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), random(0, 100));
     spectrum_dump(3);    
-    show_power(23,2);
 }
 // cursor handling for menue
 void set_cursor(uint8_t x_offset, uint8_t y_offset, uint8_t entry, uint8_t pos)
