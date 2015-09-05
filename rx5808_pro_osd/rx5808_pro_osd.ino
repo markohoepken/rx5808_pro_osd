@@ -100,7 +100,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define rssiPin A1   // Depands on patch of minimOSD
 #define rx5808_SEL 5 // Depands on patch of minimOSD
 
-#define POWER_SENSE A0
+// #define POWER_SENSE A0 difficult to solder
+#define POWER_SENSE A2 // easier to solder
 #define POWER_SCALE 14.75 // divider 1.5K 22K
 
 #define spiDataPin 11
