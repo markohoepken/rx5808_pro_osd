@@ -483,6 +483,7 @@ void loop()
                     rssi_setup_min=400;
                     rssi_setup_max=0;   
                     rssi_setup_run=RSSI_SETUP_RUN;
+                    spectrum_init();
                 }   
                 // trigger new scan from begin
                 channel=CHANNEL_MIN;
@@ -491,6 +492,7 @@ void loop()
                 scan_start=1;
                 osd_mode=OSD_INT_SYC; // internal sync  
                 menu_no_hide=1;
+                //osd.set_background(MAX7556_BACKGROUND_GRAY);
                 
             break;
             case STATE_MANUAL: // manual mode 
@@ -506,7 +508,8 @@ void loop()
                 }
                 force_seek=1;
                 osd_mode=OSD_EXT_SYC; // external sync   
-                menu_no_hide=0;                
+                menu_no_hide=0;  
+                //osd.set_background(MAX7556_BACKGROUND_VIDEO);                
             break;
             case STATE_SETUP:
                 osd_mode=OSD_INT_SYC; // internal sync                  
@@ -518,8 +521,10 @@ void loop()
                 screen_mode_selection(); 
                 menu_no_hide=1;                
             break;    
-            osd.control(osd_mode);          
+
         } // end switch
+        osd.control(osd_mode);
+       
         last_state=state;
     }
     /*************************************/
@@ -651,6 +656,7 @@ void loop()
                     state=state_last_used;                 
                     osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), " Settings saved..");
                     delay(1000);
+                    spectrum_init(); // clear spectrum
                 }
                 else // update screen
                 { 
@@ -1704,7 +1710,7 @@ void screen_band_scanner(uint8_t mode)
     }
     else
     {
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     RSSI CALIBRATION    \x02");        
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  RSSI CALIBRATION       \x02");        
         osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x02Run:?? MIN:???   MAX:??? \x02");        
         osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
         }
