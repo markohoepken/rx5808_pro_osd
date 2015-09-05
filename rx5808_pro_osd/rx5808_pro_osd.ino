@@ -132,10 +132,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define STATE_SEEK 1
 #define STATE_SCAN 2
 #define STATE_MANUAL 3
-#define STATE_SWITCH 4
-#define STATE_SETUP 5
-#define STATE_RSSI_SETUP 6
-#define STATE_MODE_SELECT 7
+#define STATE_SETUP 4
+#define STATE_RSSI_SETUP 5
+#define STATE_MODE_SELECT 6
 
 #define START_STATE STATE_SEEK
 #define MAX_STATE STATE_MANUAL
@@ -287,6 +286,7 @@ uint8_t menu_no_hide=0;
 uint8_t osd_mode=0; // keep current osd mode for wakeup
 uint8_t power_update_delay=POWER_UPDATE_RATE;
 
+uint8_t debug=0;
 
 /*
  Array to keep values for spectrum print.
@@ -464,7 +464,7 @@ void loop()
         /*   Main screen draw   */
         /************************/            
         // changed state, clear an draw new screen       
-    
+
         switch (state) 
         {    
             case STATE_SCAN: // Band Scanner
@@ -518,7 +518,7 @@ void loop()
                 screen_mode_selection(); 
                 menu_no_hide=1;                
             break;    
-            osd.control(osd_mode);
+            osd.control(osd_mode);          
         } // end switch
         last_state=state;
     }
@@ -529,7 +529,7 @@ void loop()
     /*****************************************/
     /*   Processing MANUAL MODE / SEEK MODE  */
     /*****************************************/
-    if(state == STATE_MANUAL || state == STATE_SEEK || state == STATE_SWITCH)
+    if(state == STATE_MANUAL || state == STATE_SEEK)
     {
         if(state == STATE_MANUAL) // MANUAL MODE
         {
@@ -1518,14 +1518,7 @@ void spectrum_init(void)
     {
         for (y=0; y<6;y++) 
         {
-            if(y==0) // fill lowest line with black bar
-            {
-                spectrum_display[x][y]=0x00; // black bar = 00
-            }
-            else
-            {
-                spectrum_display[x][y]=0xff; // center dot coded as 255
-            }            
+            spectrum_display[x][y]=0xff; // center dot coded as 255            
         }
     }
 }
@@ -1605,9 +1598,10 @@ void spectrum_dump (uint8_t height)
     {
         for (x=0; x<BAND_SCANNER_SPECTRUM_X_MAX;x++)
         {
+            // create line
             string[x]=spectrum_get_char(spectrum_display[x][y]);
         }
-        // dump string
+        // dump line
         osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3-y,string);
     }
 }
@@ -1712,7 +1706,6 @@ void screen_band_scanner(uint8_t mode)
         osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x02Run:?? MIN:???   MAX:??? \x02");        
         osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
         }
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
     spectrum_dump(6); 
     show_power(23,2);
@@ -1742,7 +1735,6 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,5,"\x02 FREQ: ???? GHz          \x02");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,6,"\x02 RSSI:\x83\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x89\x02");    
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,7,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-3,"\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f");
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");        
 
     // fill in data
