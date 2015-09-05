@@ -663,12 +663,16 @@ void loop()
                 }
             }            
         }    
-        // new scan possible by press scan
-        if (get_key() == KEY_UP) // force new full new scan
+        // Hold function
+        if (get_key() == KEY_UP)
         {   
-            force_menu_redraw=1;
-            channel=CHANNEL_MIN;
-            scan_start=1;
+            // pause
+            osd_print (3,2, "HOLD BAND SCANNER");
+            while(get_key() == KEY_UP);
+            // stay here until key pressed again
+            while(get_key() == KEY_NONE);
+            osd_print (3,2, "     BAND SCANNER");
+            while(get_key() == KEY_UP);            
         }            
         // update index after channel change   
         channelIndex = channelList[channel];          
@@ -1697,7 +1701,7 @@ void screen_band_scanner(uint8_t mode)
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
     if(mode==0)
     {
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02   BAND SCANNER     \xd0 0.0\x02");    
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     BAND SCANNER   \xd0 0.0\x02");    
         osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
     }
     else
