@@ -161,7 +161,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 
 
 // Menu settings
-#define MENU_HIDE_TIMER 300 // 50 ~ 1 second
+#define MENU_HIDE_TIMER 150 // 50 ~ 1 second
 
 #define MENU_MODE_SELECTION_X 6
 #define MENU_MODE_SELECTION_Y 2
@@ -562,7 +562,7 @@ void loop()
         wait_rssi_ready();
         rssi = readRSSI();
         // add spectrum of current channel
-        spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), rssi);
+        spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), rssi,1);
         spectrum_dump(3);    
         // RSSI bar
         draw_rssi_bar(9, 6, 17, rssi);
@@ -610,6 +610,8 @@ void loop()
     /****************************/
     else if (state == STATE_SCAN || state == STATE_RSSI_SETUP) 
     {
+    
+        #if 1
         // force tune on new scan start to get right RSSI value
         if(scan_start)
         {
@@ -624,8 +626,30 @@ void loop()
         // value must be ready
         rssi = readRSSI();
         // add spectrum of current channel
-        spectrum_add_column (6, pgm_read_word_near(channelFreqTable + channelIndex), rssi);
+        spectrum_add_column (6, pgm_read_word_near(channelFreqTable + channelIndex), rssi,1);
         spectrum_dump(6);          
+        #else // background scan
+            spectrum_init();
+            uint8_t channel_scan;
+            uint8_t channel_index;
+            for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX;channel_scan++ )
+            {
+               // osd_print_debug(1,1,"CH:",channel_scan);
+           // stay here until key pressed again
+            //while(get_key() == KEY_NONE);
+            //while(get_key() == KEY_DOWN);          
+                channel_index = channelList[channel_scan];            
+                setChannelModule(channel_index);   // TUNE 
+                time_of_tune=millis();                
+                wait_rssi_ready();
+                rssi = readRSSI();
+                // add spectrum of current channel
+                spectrum_add_column (6, pgm_read_word_near(channelFreqTable + channel_index), rssi,0);                
+            }
+            //osd_print (3,2, "     BAND SCANNER");
+            spectrum_dump(6);  
+        #endif
+        
         if(state == STATE_SCAN)        
         {
             if (rssi > RSSI_SEEK_TRESHOLD) 
@@ -677,7 +701,34 @@ void loop()
             while(get_key() == KEY_NONE);
             osd_print (3,2, "     BAND SCANNER");
             while(get_key() == KEY_UP);            
-        }            
+        }    
+        // background fast scan
+         if ((state == STATE_SCAN) && (get_key() == KEY_DOWN))
+        {   
+            while(get_key() == KEY_DOWN);
+            osd_print (3,2, "BACHGROUND SCAN");        
+            spectrum_init();
+            uint8_t channel_scan;
+            uint8_t channel_index;
+            for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX;channel_scan++ )
+            {
+               // osd_print_debug(1,1,"CH:",channel_scan);
+           // stay here until key pressed again
+            //while(get_key() == KEY_NONE);
+            //while(get_key() == KEY_DOWN);          
+                channel_index = channelList[channel_scan];            
+                setChannelModule(channel_index);   // TUNE 
+                time_of_tune=millis();                
+                wait_rssi_ready();
+                rssi = readRSSI();
+                // add spectrum of current channel
+                spectrum_add_column (6, pgm_read_word_near(channelFreqTable + channel_index), rssi,0);                
+            }
+            osd_print (3,2, "     BAND SCANNER");
+            spectrum_dump(6);  
+        }        
+        
+        
         // update index after channel change   
         channelIndex = channelList[channel];          
     }
@@ -1338,7 +1389,7 @@ void osd_print_debug_x (uint8_t x, uint8_t y, char string[30], uint16_t value)
 // The "real" center line has correct value.
 
 
-void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi)
+void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi, uint8_t marker)
 {
     // check x-position first
     // X POSTION HANDLING (range of array 0..26 = 27 positions)
@@ -1364,7 +1415,7 @@ void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi)
         //spectrum_add_column_single (scale, frequency-SPECTURM_BANDWITH, rssi*SPECTURM_SIDE_FACTOR,0); // center   
     }
     //spectrum_add_column_single (scale, frequency+SPECTURM_BANDWITH, rssi); // right
-    spectrum_add_column_single (scale, frequency, rssi,1); // center
+    spectrum_add_column_single (scale, frequency, rssi,marker); // center
     //spectrum_add_column_single (scale, frequency+SPECTURM_BANDWITH, rssi); // right
    
     if(frequency < BAND_SCANNER_FREQ_MAX-SPECTURM_BANDWITH) // next right
@@ -1749,7 +1800,7 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     // fill in data
     screen_manual_data(channelIndex);
     // add spectrum of current channel
-    //spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), random(0, 100));
+    //spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), random(0, 100),1);
     spectrum_dump(3);    
 }
 // cursor handling for menue
