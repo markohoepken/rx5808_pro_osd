@@ -632,7 +632,8 @@ void loop()
             spectrum_init();
             uint8_t channel_scan;
             uint8_t channel_index;
-            for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX;channel_scan++ )
+            while(channel_scan <= CHANNEL_MAX_INDEX)
+            //for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX;channel_scan++ )
             {
                // osd_print_debug(1,1,"CH:",channel_scan);
            // stay here until key pressed again
@@ -644,7 +645,8 @@ void loop()
                 wait_rssi_ready();
                 rssi = readRSSI();
                 // add spectrum of current channel
-                spectrum_add_column (6, pgm_read_word_near(channelFreqTable + channel_index), rssi,0);                
+                spectrum_add_column (6, pgm_read_word_near(channelFreqTable + channel_index), rssi,0);     
+                channel_scan++;
             }
             //osd_print (3,2, "     BAND SCANNER");
             spectrum_dump(6);  
