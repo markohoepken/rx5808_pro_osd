@@ -882,8 +882,9 @@ void loop()
                     break;
                     case 3: // RSSI CALIBRATE
                         state=STATE_RSSI_SETUP;
+                        spectrum_init();                          
                     break;
-                    case 4: // FONT UPLAD
+                    case 4: // Font upload
                         uploadFont();                        
                     break;                    
                 } // end switch                
