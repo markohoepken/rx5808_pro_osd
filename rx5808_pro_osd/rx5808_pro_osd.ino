@@ -926,35 +926,18 @@ void spi_32_transfer(uint32_t value)
 {
     uint8_t* buffer = (uint8_t*) &value; // for simple byte access
     
-    Spi.mode((1<<DORD) | (1<<SPR1) | (1<<SPR0));  // set to SPI LSB first mode  and to 1/64 speed
+//    Spi.mode((1<<DORD) | (1<<SPR1) | (1<<SPR0));  // set to SPI LSB first mode  and to 1/64 speed
+    Spi.mode((1<<DORD) | (1<<SPR0));  // set to SPI LSB first mode  and to 1/64 speed
     
     digitalWrite(rx5808_SEL,LOW); // select
     delayMicroseconds(1); 
     
     Spi.transfer(*(buffer + 0)); // byte 0
-    
-    digitalWrite(rx5808_SEL,HIGH); // transfer done
-    delayMicroseconds(1); 
-    
-    digitalWrite(rx5808_SEL,LOW); // select    
-    delayMicroseconds(1); 
-    
+
     Spi.transfer(*(buffer + 1)); // byte 1
-    
-    digitalWrite(rx5808_SEL,HIGH); // transfer done
-    delayMicroseconds(1);     
-    
-    digitalWrite(rx5808_SEL,LOW); // select
-    delayMicroseconds(1); 
-    
+
     Spi.transfer(*(buffer + 2)); // byte 2
 
-    digitalWrite(rx5808_SEL,HIGH); // transfer done
-    delayMicroseconds(1); 
-    
-    digitalWrite(rx5808_SEL,LOW); // select
-    delayMicroseconds(1); 
-    
     Spi.transfer(*(buffer + 3)); // byte 3
     digitalWrite(rx5808_SEL,HIGH); // transfer done
     delayMicroseconds(1);     
@@ -1029,15 +1012,6 @@ void setChannelModule__(uint8_t channel)
   uint8_t rw = 1;    
 */
  
-  address = 0x8;
-  data = 0x0;
-  write = 0;
- 
-  buffer32=0; //  init buffer to 0
-  buffer32=((data & 0xfffff) << 12 ) | ((write & 1)<<11) | ((address & 0xf) <<7);
-  
-  spi_32_transfer(buffer32);
-
   address = 0x1;
   data = channelData;
   write = 1;
@@ -1045,7 +1019,7 @@ void setChannelModule__(uint8_t channel)
   buffer32=0; //  init buffer to 0
   buffer32=((data & 0xfffff) << 12 ) | ((write & 1)<<11) | ((address & 0xf) <<7);
   spi_32_transfer(buffer32);
-  delay(200);
+  //delay(200);
 }
 
 
@@ -1053,43 +1027,15 @@ void setChannelModule(uint8_t channel)
 {
   uint8_t i;
   uint16_t channelData;
-
-
   
   //channelData = pgm_read_word(&channelTable[channel]);
   //channelData = channelTable[channel];
   channelData = pgm_read_word_near(channelTable + channel);
 
 //   osd_print_debug_x (1, 1, "TUNE:", channelData);  
-  SPCR = 0; // release SPI 
-  SERIAL_ENABLE_HIGH();
-  //delay(500);  
+  SPCR = 0; // release SPI controller for bit banging
+
   
-  // bit bash out 25 bits of data
-  // Order: A0-3, !R/W, D0-D19
-  // A0=0, A1=0, A2=0, A3=1, RW=0, D0-19=0
-  SERIAL_ENABLE_HIGH();
-  delayMicroseconds(1);  
-  //delay(2);
-  SERIAL_ENABLE_LOW();
-
-  SERIAL_SENDBIT0();
-  SERIAL_SENDBIT0();
-  SERIAL_SENDBIT0();
-  SERIAL_SENDBIT1();
-
-  SERIAL_SENDBIT0();
-
-  // remaining zeros
-  for (i = 20; i > 0; i--)
-    SERIAL_SENDBIT0();
-
-  // Clock the data in
-  SERIAL_ENABLE_HIGH();
-  //delay(2);
-  delayMicroseconds(1);  
-  SERIAL_ENABLE_LOW();
-
   // Second is the channel data from the lookup table
   // 20 bytes of register data are sent, but the MSB 4 bits are zeros
   // register address = 0x1, write, data0-15=channelData data15-19=0x0
@@ -1129,15 +1075,7 @@ void setChannelModule(uint8_t channel)
 
   // Finished clocking data in
   SERIAL_ENABLE_HIGH();
-  //digitalWrite(slaveSelectPin, LOW);
-  //digitalWrite(spiClockPin, LOW);
-  //digitalWrite(spiDataPin, LOW);  
-  //delay(500);
-  //delay(2);
 
-  //digitalWrite(slaveSelectPin, LOW);
-  //digitalWrite(spiClockPin, LOW);
-  //digitalWrite(spiDataPin, LOW);
   
   Spi.mode(0);  // set SPI mode back to MSB first (used by OSD)  
   
