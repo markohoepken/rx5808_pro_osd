@@ -1838,9 +1838,13 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
 
     // fill in data
     screen_manual_data(channelIndex);
-    // add spectrum of current channel
-    //spectrum_add_column (3, pgm_read_word_near(channelFreqTable + channelIndex), random(0, 100),1);
-    spectrum_dump(3);    
+    // init spectrum    
+    spectrum_dump(3);   // show empty
+    // add scanning text
+    osd_print(10,9,"Scanning..");     
+    // run background scan and show results
+    background_scan(3);
+    spectrum_dump(3);
 }
 // cursor handling for menue
 void set_cursor(uint8_t x_offset, uint8_t y_offset, uint8_t entry, uint8_t pos)
