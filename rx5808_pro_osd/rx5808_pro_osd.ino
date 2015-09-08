@@ -249,6 +249,11 @@ uint8_t channelList[CHANNEL_MAX_INDEX+1]={};
 //  19, 18, 17, 16, 7, 8, 24, 6, 9, 25, 5, 10, 26, 4, 11, 27, 3, 12, 28, 2, 13, 29, 1, 14, 30, 0, 15, 31, 20, 21, 22, 23, 33,34,35,36,37,38,39,40
 //};
 
+// gab fill lookup
+uint8_t clone_bar_to_lower[BAND_SCANNER_SPECTRUM_X_MAX]={0};
+uint8_t clone_bar_to_upper[BAND_SCANNER_SPECTRUM_X_MAX]={0};
+uint8_t clone_bar_to_left[BAND_SCANNER_SPECTRUM_X_MAX]={0};
+uint8_t clone_bar_to_right[BAND_SCANNER_SPECTRUM_X_MAX]={0};
 
 uint8_t channel = 0;
 uint8_t channelIndex = 0;
@@ -313,6 +318,28 @@ uint8_t spectrum_channel_value[CHANNEL_MAX+1]; // keeps rssi value for each colu
 /**********************************************/
 void setup() 
 {
+    // fill clonebar lookup with data
+    // its easier to maintain in this manner instead of setting the array static
+    // done by manual select the right entries
+    // for each "open" gap in spectrum
+    clone_bar_to_upper[0]=1;
+    clone_bar_to_right[1]=1;
+    clone_bar_to_lower[3]=1;
+    clone_bar_to_upper[4]=1;
+    clone_bar_to_upper[5]=1;    
+    clone_bar_to_left[7]=1;
+    clone_bar_to_upper[9]=1;
+    clone_bar_to_lower[13]=1;
+    clone_bar_to_upper[16]=1;    
+    clone_bar_to_right[17]=1;
+    clone_bar_to_lower[20]=1;
+    clone_bar_to_upper[21]=1;
+    clone_bar_to_left[23]=1;
+    clone_bar_to_upper[23]=1;
+    clone_bar_to_left[26]=1;
+    clone_bar_to_lower[26]=1;
+ 
+
     // create channelList lookup sorted by freqency
     // 1. fill array
     for(int i=0; i<=CHANNEL_MAX_INDEX; i++) 
@@ -358,6 +385,9 @@ void setup()
     rssi_min=((EEPROM.read(EEPROM_ADR_RSSI_MIN_H)<<8) | (EEPROM.read(EEPROM_ADR_RSSI_MIN_L)));
     rssi_max=((EEPROM.read(EEPROM_ADR_RSSI_MAX_H)<<8) | (EEPROM.read(EEPROM_ADR_RSSI_MAX_L)));
 
+    // debug settings
+    // rssi_min=5; // force bars in any case
+    // rssi_max=300; //  expect no clipping (typical ~250)
     
     video_mode=EEPROM.read(EEPROM_VIDEO_MODE);
     force_menu_redraw=1;
@@ -1390,8 +1420,8 @@ void osd_print_debug_x (uint8_t x, uint8_t y, char string[30], uint16_t value)
 // At the end, the spectrum looks "nice".
 // The "real" center line has correct value.
 
-
-void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi, uint8_t marker)
+#if 0
+void spectrum_add_column_DEAD (uint8_t scale, uint16_t frequency, uint8_t rssi, uint8_t marker)
 {
     // check x-position first
     // X POSTION HANDLING (range of array 0..26 = 27 positions)
@@ -1430,10 +1460,11 @@ void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi, uint8
     }     
     
 }
-
+#endif
 // add one spectrum line in spectrum buffer
 // this function does all the colum calcuation with rounding
-void spectrum_add_column_single (uint8_t scale, uint16_t frequency, uint8_t rssi, uint8_t marker)
+//void spectrum_add_column_single (uint8_t scale, uint16_t frequency, uint8_t rssi, uint8_t marker)
+void spectrum_add_column (uint8_t scale, uint16_t frequency, uint8_t rssi, uint8_t marker)
 {
     if(rssi>100)
     {
@@ -1478,6 +1509,7 @@ void spectrum_add_column_single (uint8_t scale, uint16_t frequency, uint8_t rssi
         }
         // print arrow line
         osd_print (BAND_SCANNER_SPECTRUM_X_MIN, BAND_SCANNER_SPECTRUM_Y_MIN,arrow_string );
+
     }
     // Y SCALING
     //
@@ -1564,7 +1596,43 @@ void spectrum_add_column_single (uint8_t scale, uint16_t frequency, uint8_t rssi
                 }
             }
         }
-        spectrum_display[x][y-1]=value;        
+
+        
+        // gap fill handler
+        // We have 40 channels, but 54 colums. Due to rounding and frenqencies, some columns
+        // are never used. This looks like "gaps" in the spectrum
+        // To fill this gaps (they are looking ugly, and they are "filled" anyway with "spectrum")
+        // special lookup tables do exist with rules, how to handle this gaps.
+        // There are 4 tables
+        // 1. clone upper by lower value
+        // 2. clone lower by upper value
+        // 3. clone a full character from right side
+        // 4. clone a full character from left side
+        
+        // NOTE: To keep code maintainable this is NOT integrated in segement above.
+        //       ... less efficient, but easier to change / fix
+
+        // clone sub bars
+        if(clone_bar_to_upper[x])
+        {
+            value=value|((value&0xf0) >> 4);
+        }
+        if(clone_bar_to_lower[x])
+        {
+            value=value|((value&0x0f) <<4);
+        }
+        // Store character
+        spectrum_display[x][y-1]=value;   // set character        
+        
+        // clone full bar
+        if(clone_bar_to_right[x])
+        {
+            spectrum_display[x+1][y-1]=spectrum_display[x][y-1];
+        }
+        if(clone_bar_to_left[x])
+        {
+            spectrum_display[x-1][y-1]=spectrum_display[x][y-1];
+        }     
     }    
 }
 
