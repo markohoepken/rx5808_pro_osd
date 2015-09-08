@@ -308,8 +308,7 @@ uint8_t debug=0;
  Organisation of array: 0:0 = bottom left corner
 */
 uint8_t spectrum_display[BAND_SCANNER_SPECTRUM_X_MAX][6];
-uint8_t spectrum_display_value[BAND_SCANNER_SPECTRUM_X_MAX*2]; // keeps rssi value for each column
-uint8_t spectrum_channel_value[CHANNEL_MAX+1]; // keeps rssi value for each column
+uint8_t spectrum_channel_value[CHANNEL_MAX+1]={0}; // keeps rssi value for each column for fast statistic
 
 
 /**********************************************/
@@ -345,7 +344,7 @@ void setup()
     {
         channelList[i]=i;
     }
-    // Bubble sort algorism by value of freqency reference
+    // Bubble sort algorythm by value of freqency reference
     for(int i=0; i<CHANNEL_MAX_INDEX; i++) {
         for(int o=0; o<((CHANNEL_MAX_INDEX+1)-(i+1)); o++) 
         {
@@ -676,11 +675,19 @@ void loop()
                 }                     
             }                
             rssi = readRSSI();
+            // save raw for channel marker
+//            spectrum_channel_value[channel_scan]=rssi;
+            //spectrum_channel_value[channel_scan]=rssi;
+            spectrum_channel_value[7]=50;
+            spectrum_channel_value[15]=60;
             // add spectrum of current channel
             spectrum_add_column (6, pgm_read_word_near(channelFreqTable + channel_index), rssi,0);     
             channel_scan++;
         }
         spectrum_dump(6);  
+        // NOT WORKING YET
+        //dump_channels(BAND_SCANNER_SPECTRUM_Y_MIN-8);
+        
         if(state == STATE_RSSI_SETUP) {
             if(!rssi_setup_run--)    
             {
@@ -888,8 +895,7 @@ void loop()
                         uploadFont();                        
                     break;                    
                 } // end switch                
-            }
-            
+            }            
         }
     }
 
@@ -1290,6 +1296,10 @@ void show_power(uint8_t x, uint8_t y)
 }
 
 
+// read values
+// to average
+// to normisation
+// do statistic
 uint16_t readRSSI() 
 {
     uint16_t rssi = 0;
@@ -1310,6 +1320,7 @@ uint16_t readRSSI()
             rssi_setup_max=rssi;
         }    
     }   
+    
 #if 0    
     osd_print_debug (1, 3, " min: ",rssi_min );  
     osd_print_debug (16, 3, " max: ",rssi_max );      
@@ -1681,6 +1692,48 @@ char spectrum_get_char(uint8_t value)
             ret = 0x8e; // center dot            
     }    
     return(ret);
+}
+
+void dump_channels(uint8_t y_pos)
+{
+    // dumps potential channels by hill climb anaysis.
+    uint8_t channel_scan;
+    uint8_t last_value=0;
+//    char marker_string[]="                           "; // clear line
+    char marker_string[]="aaaaaaaaaabbbbbbbbbbccccccc"; // clear line
+    #if 1
+    for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX;channel_scan++ )
+    {
+        if(spectrum_channel_value[channel_scan] > last_value)
+        {
+            last_value=spectrum_channel_value[channel_scan];
+        }
+        else // last must have been the maximum, add channel marker
+        {
+            // X POSTION HANDLING (range of array 0..26 = 27 positions)
+            // calculate column position of 54 columns
+            
+            // Note: calculation done on runtime, since preprocessor seems to have issues with forumlars
+            // simple interger with 10x factor and /10 at end
+            #define INTEGER_GAIN 100
+            uint16_t frequency_delta=(pgm_read_word_near(channelFreqTable + channel_scan)-BAND_SCANNER_FREQ_MIN); // no rouding issue
+            uint16_t frequency_per_char=((BAND_SCANNER_FREQ_MAX-BAND_SCANNER_FREQ_MIN)*INTEGER_GAIN)/((BAND_SCANNER_SPECTRUM_X_MAX-1)*2);
+            // special rounding is required, since lowest in on left side, highest on right sight of character
+            #define ROUND_CORRECTION 2 // stretches band a little
+            uint8_t x_pos_54= (frequency_delta*(INTEGER_GAIN+ROUND_CORRECTION)) / frequency_per_char;
+            // find right column of 27 characters
+            uint8_t x=((x_pos_54)/2); // final down scale to single character
+            
+        
+            // add right marker at last position
+            marker_string[x]=pgm_read_byte_near(channelSymbol + channelList[channel_scan-1]);
+            last_value=0;
+        }
+    }
+    #endif
+    // print marler line
+    osd_print (BAND_SCANNER_SPECTRUM_X_MIN, y_pos,marker_string );
+    
 }
 
 void spectrum_dump (uint8_t height)
