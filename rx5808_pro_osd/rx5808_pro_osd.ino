@@ -123,11 +123,13 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define RSSI_MIN_VAL 90
 #define RSSI_MAX_VAL 300
 // 75% threshold, when channel is printed in spectrum
-#define RSSI_SCANNER_FOUND 60 
+#define RSSI_SCANNER_FOUND 50 
 // 80% under max value for RSSI 
-#define RSSI_SEEK_TRESHOLD 85
+#define RSSI_SEEK_TRESHOLD 80
 // scan loops for setup run
 #define RSSI_SETUP_RUN 5
+// reduce max value to cover > 100%
+#define RSSI_SETUP_MARGE 10 // 10%
 
 #define STATE_SEEK_FOUND 0
 #define STATE_SEEK 1
@@ -669,16 +671,18 @@ void loop()
                     switch_count=WAIT_MODE_ENTRY+1; // faster main menu since one loop is 1 second                       
                 }
                   // Hold function
-                if (get_key() == KEY_UP)
-                {   
-                    // pause
-                    osd_print (3,2, "HOLD BAND SCANNER");
-                    while(get_key() == KEY_UP);
-                    // stay here until key pressed again
-                    while(get_key() == KEY_NONE);
-                    osd_print (3,2, "     BAND SCANNER");
-                    while(get_key() == KEY_UP);            
-                }                     
+                if(state != STATE_RSSI_SETUP) { // no hold on rssi setuo
+                    if (get_key() == KEY_UP)
+                    {   
+                        // pause
+                        osd_print (3,2, "HOLD BAND SCANNER");
+                        while(get_key() == KEY_UP);
+                        // stay here until key pressed again
+                        while(get_key() == KEY_NONE);
+                        osd_print (3,2, "     BAND SCANNER");
+                        while(get_key() == KEY_UP);            
+                    }                     
+                }
             }                
             rssi = readRSSI();
             // save raw for channel marker + Filter
@@ -703,7 +707,7 @@ void loop()
             {
                 // setup done
                 rssi_min=rssi_setup_min;
-                rssi_max=rssi_setup_max;
+                rssi_max=rssi_setup_max+RSSI_SETUP_MARGE;
                 // save 16 bit
                 EEPROM.write(EEPROM_ADR_RSSI_MIN_L,(rssi_min & 0xff));        
                 EEPROM.write(EEPROM_ADR_RSSI_MIN_H,(rssi_min >> 8));    
