@@ -78,6 +78,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #include "ArduCam_Max7456.h"
 #include <EEPROM.h>
 #include "Spi.h"
+#include <MemoryFree.h>
 
 /* *************************************************/
 /* ***************** DEFINITIONS *******************/
@@ -122,9 +123,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define RSSI_MIN_VAL 90
 #define RSSI_MAX_VAL 300
 // 75% threshold, when channel is printed in spectrum
-#define RSSI_SEEK_FOUND 75 
+#define RSSI_SCANNER_FOUND 60 
 // 80% under max value for RSSI 
-#define RSSI_SEEK_TRESHOLD 80
+#define RSSI_SEEK_TRESHOLD 85
 // scan loops for setup run
 #define RSSI_SETUP_RUN 5
 
@@ -308,7 +309,12 @@ uint8_t debug=0;
  Organisation of array: 0:0 = bottom left corner
 */
 uint8_t spectrum_display[BAND_SCANNER_SPECTRUM_X_MAX][6];
-uint8_t spectrum_channel_value[CHANNEL_MAX+1]={0}; // keeps rssi value for each column for fast statistic
+
+// keeps rssi value for each column for fast statistic
+// Note to index: We have 40 channels, but NEED 41 places to store.
+// By this we can detect an bar at the right edge.
+uint8_t spectrum_channel_value[CHANNEL_MAX+2]={0}; 
+
 
 
 /**********************************************/
@@ -637,7 +643,7 @@ void loop()
     {
         // background scan with key interruption
         spectrum_init();
-        uint8_t channel_scan;
+        uint8_t channel_scan=0;
         uint8_t channel_index;
         uint8_t exit=0;
         while(!exit &  channel_scan <= CHANNEL_MAX_INDEX)
@@ -675,18 +681,22 @@ void loop()
                 }                     
             }                
             rssi = readRSSI();
-            // save raw for channel marker
-//            spectrum_channel_value[channel_scan]=rssi;
-            //spectrum_channel_value[channel_scan]=rssi;
-            spectrum_channel_value[7]=50;
-            spectrum_channel_value[15]=60;
+            // save raw for channel marker + Filter
+            if(rssi >RSSI_SCANNER_FOUND)
+            {
+                spectrum_channel_value[channel_scan]=rssi;
+            }
+            else
+            {
+                spectrum_channel_value[channel_scan]=0;
+            }
             // add spectrum of current channel
             spectrum_add_column (6, pgm_read_word_near(channelFreqTable + channel_index), rssi,0);     
             channel_scan++;
         }
         spectrum_dump(6);  
-        // NOT WORKING YET
-        //dump_channels(BAND_SCANNER_SPECTRUM_Y_MIN-8);
+        // analyse spectrum an mark potential channels
+        dump_channels(BAND_SCANNER_SPECTRUM_Y_MIN-8);
         
         if(state == STATE_RSSI_SETUP) {
             if(!rssi_setup_run--)    
@@ -1637,12 +1647,15 @@ void dump_channels(uint8_t y_pos)
     // dumps potential channels by hill climb anaysis.
     uint8_t channel_scan;
     uint8_t last_value=0;
+    uint8_t channel_index=0;
 //    char marker_string[]="                           "; // clear line
-    char marker_string[]="aaaaaaaaaabbbbbbbbbbccccccc"; // clear line
+//    char marker_string[]="aaaaaaaaaabbbbbbbbbbccccccc"; // clear line
+    char marker_string[]="                           "; // clear line    
     #if 1
-    for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX;channel_scan++ )
+    // Note we must run 40 + 1 to print right side (detect max)
+    for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX+1;channel_scan++ )
     {
-        if(spectrum_channel_value[channel_scan] > last_value)
+        if(spectrum_channel_value[channel_scan] >= last_value)
         {
             last_value=spectrum_channel_value[channel_scan];
         }
@@ -1654,18 +1667,19 @@ void dump_channels(uint8_t y_pos)
             // Note: calculation done on runtime, since preprocessor seems to have issues with forumlars
             // simple interger with 10x factor and /10 at end
             #define INTEGER_GAIN 100
-            uint16_t frequency_delta=(pgm_read_word_near(channelFreqTable + channel_scan)-BAND_SCANNER_FREQ_MIN); // no rouding issue
+            channel_index = channelList[channel_scan-1];
+            uint16_t frequency_delta=(pgm_read_word_near(channelFreqTable + channel_index)-BAND_SCANNER_FREQ_MIN); // no rouding issue
             uint16_t frequency_per_char=((BAND_SCANNER_FREQ_MAX-BAND_SCANNER_FREQ_MIN)*INTEGER_GAIN)/((BAND_SCANNER_SPECTRUM_X_MAX-1)*2);
             // special rounding is required, since lowest in on left side, highest on right sight of character
             #define ROUND_CORRECTION 2 // stretches band a little
             uint8_t x_pos_54= (frequency_delta*(INTEGER_GAIN+ROUND_CORRECTION)) / frequency_per_char;
             // find right column of 27 characters
             uint8_t x=((x_pos_54)/2); // final down scale to single character
-            
-        
             // add right marker at last position
+            
             marker_string[x]=pgm_read_byte_near(channelSymbol + channelList[channel_scan-1]);
             last_value=0;
+            //marker_string[10]=0xA0;
         }
     }
     #endif
