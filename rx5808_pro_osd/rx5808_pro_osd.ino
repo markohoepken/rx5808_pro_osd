@@ -1854,7 +1854,9 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     osd_print(10,9,"Scanning..");     
     // run background scan and show results
     background_scan(3);
+    last_channel_index=255; // force new tune, since specturn changed channel    
     spectrum_dump(3);
+
 }
 // cursor handling for menue
 void set_cursor(uint8_t x_offset, uint8_t y_offset, uint8_t entry, uint8_t pos)
