@@ -22,6 +22,8 @@
 //MAX7456 reg write addresses
 #define MAX7456_VM0_reg   0x00
 #define MAX7456_VM1_reg   0x01
+#define MAX7456_HOS_reg   0x02 // horzontal offset
+#define MAX7456_VOS_reg   0x03 // vertical offset
 #define MAX7456_DMM_reg   0x04
 #define MAX7456_DMAH_reg  0x05
 #define MAX7456_DMAL_reg  0x06
@@ -85,6 +87,8 @@ class OSD: public BetterStream
     void openPanel(void);
     void closePanel(void);
     void control(uint8_t ctrl);
+    void set_h_offset(uint8_t offset);
+    void set_v_offset(uint8_t offset);
     void detectMode(void);
     void setMode(int mode);
     void openSingle(uint8_t x, uint8_t y);

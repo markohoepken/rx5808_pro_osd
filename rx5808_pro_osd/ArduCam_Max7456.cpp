@@ -255,6 +255,25 @@ OSD::control(uint8_t ctrl){
   digitalWrite(MAX7456_SELECT,HIGH);
 }
 
+//------------------ set H offset ---------------------------------------------------
+void OSD::set_h_offset(uint8_t offset)
+{
+  offset&=0x3f; // just 6 bit
+  digitalWrite(MAX7456_SELECT,LOW);
+  Spi.transfer(MAX7456_HOS_reg);
+  Spi.transfer(offset); // 0 = -32 left,  32= center 63= +32 right
+  digitalWrite(MAX7456_SELECT,HIGH);
+}
+//------------------ set V offset ---------------------------------------------------
+void OSD::set_v_offset(uint8_t offset)
+{
+  offset&=0x1f; // just 0 bit
+  digitalWrite(MAX7456_SELECT,LOW);
+  Spi.transfer(MAX7456_VOS_reg);
+  Spi.transfer(offset); // 0 = +16 up, 16= center 31 = -16 down
+  digitalWrite(MAX7456_SELECT,HIGH);
+}
+
 void 
 OSD::write_NVM(int font_count, uint8_t *character_bitmap)
 {

@@ -100,7 +100,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define rssiPin A1   // Depands on patch of minimOSD
 #define rx5808_SEL 5 // Depands on patch of minimOSD
 
-// #define POWER_SENSE A0 difficult to solder
+//#define POWER_SENSE A0 // difficult to solder
 #define POWER_SENSE A2 // easier to solder
 #define POWER_SCALE 14.75 // divider 1.5K 22K
 #define POWER_UPDATE_RATE 20 // how ofter power is updated (loops)
@@ -193,6 +193,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define OSD_EXT_SYC 1
 #define OSD_INT_SYC 2
 #define OSD_OFF     0
+// most screens to "Overscan" so offset may be required.
+#define OSD_H_OFFSET 40 // adjust to your screen (0...63, 31 = center)
+#define OSD_V_OFFSET 25 // adjust to your screen (0...31, 15 = center)
 
 
 
@@ -402,6 +405,9 @@ void setup()
     //SPI Spi = SPI();
     osd.setMode(video_mode);
     osd.init();
+    osd.set_h_offset(OSD_H_OFFSET);
+    osd.set_v_offset(OSD_V_OFFSET);
+    
     // set pins
     pinMode(rx5808_SEL,OUTPUT);
     digitalWrite(rx5808_SEL,HIGH);
