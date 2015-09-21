@@ -558,6 +558,7 @@ void loop()
                     screen_manual(1,channelIndex);  
                 }
                 force_seek=1;
+                seek_up=1;
                 osd_mode=OSD_EXT_SYC; // external sync   
                 menu_no_hide=0;  
                 //osd.set_background(MAX7556_BACKGROUND_VIDEO);                
