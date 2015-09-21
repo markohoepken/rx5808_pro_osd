@@ -157,7 +157,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define EEPROM_ADR_RSSI_MAX_L 4
 #define EEPROM_ADR_RSSI_MAX_H 5
 #define EEPROM_VIDEO_MODE 6
-#define EEPROM_MANUAL_MODE 6
+#define EEPROM_MANUAL_MODE 7
 
 // Screen settings (use smaller NTSC size)
 #define SCEEEN_X_MAX 30
@@ -176,7 +176,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define MENU_SETUP_X 6
 #define MENU_SETUP_Y 2
 #define MENU_SETUP_HEADER 3
+#define MENU_MODE_ENTRY 5
 #define MENU_SETUP_ENTRY 6
+
 #define MODE_LINEAR 0 // manual step works linar
 #define MODE_BAND 1   // manual step works on bands
 // band scanner gemetry
@@ -299,6 +301,7 @@ uint16_t menu_hide_timer=MENU_HIDE_TIMER;
 uint8_t menu_no_hide=0;
 uint8_t osd_mode=0; // keep current osd mode for wakeup
 uint8_t power_update_delay=POWER_UPDATE_RATE;
+uint8_t channel_scan=0;
 
 uint8_t debug=0;
 
@@ -581,24 +584,57 @@ void loop()
     /*****************************************/
     if(state == STATE_MANUAL || state == STATE_SEEK)
     {
-        if(state == STATE_MANUAL) // MANUAL MODE
+        if(state == STATE_MANUAL) // MANUAL MODE        
         {
+
             // handling of keys
             if( get_key() == KEY_UP )        // channel UP
-            {         
-                channelIndex++;
-                if (channelIndex > CHANNEL_MAX_INDEX) 
-                {  
-                    channelIndex = CHANNEL_MIN_INDEX;
-                } 
+            {        
+                if (manual_mode== MODE_BAND)
+                {            
+                    channelIndex++;
+                    if (channelIndex > CHANNEL_MAX_INDEX) 
+                    {  
+                        channelIndex = CHANNEL_MIN_INDEX;
+                    } 
+                }
+                else
+                { // linear mode
+                    if(channel_scan < CHANNEL_MAX_INDEX)                
+                    {
+                        channel_scan++;
+                    }
+                    else
+                    {
+                        channel_scan=0;
+                    }
+                    // translate to right index
+                    channelIndex = channelList[channel_scan];                    
+                }
             }
             if( get_key() == KEY_DOWN) // channel DOWN
             {
-                channelIndex--;
-                if (channelIndex > CHANNEL_MAX_INDEX) // negative overflow
-                {  
-                    channelIndex = CHANNEL_MAX_INDEX;
-                }    
+                if (manual_mode== MODE_BAND)
+                {            
+                    channelIndex--;
+                    if (channelIndex > CHANNEL_MAX_INDEX) // negative overflow
+                    {  
+                        channelIndex = CHANNEL_MAX_INDEX;
+                    }    
+                }
+                else
+                { // linear mode
+                    if(channel_scan > 0)
+                    {
+                        channel_scan--;
+                    }
+                    else
+                    {
+                        channel_scan=CHANNEL_MAX_INDEX;
+                    }
+                    // translate to right index
+                    channelIndex = channelList[channel_scan];                  
+                }                    
             }            
         }
     
@@ -657,8 +693,7 @@ void loop()
     {
         // background scan with key interruption
         spectrum_init();
-        uint8_t channel_scan=0;
-        uint8_t channel_index;
+        uint8_t channel_index=0;        
         uint8_t exit=0;
         while(!exit &  channel_scan <= CHANNEL_MAX_INDEX)
         //for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX;channel_scan++ )
@@ -787,7 +822,7 @@ void loop()
             if(get_key() == KEY_MID)
             {
                 // Menu navigation
-                if (menu_id < MENU_SETUP_ENTRY-1)
+                if (menu_id < MENU_MODE_ENTRY-1)
                 {
                     menu_id++; // next menu entry
                 } 
@@ -908,9 +943,9 @@ void loop()
                             osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"LINEAR");       
                         } 
                         EEPROM.write(EEPROM_MANUAL_MODE,manual_mode);
-                        osd_print (MENU_SETUP_X-2, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "Saved.          ");
+                        osd_print (MENU_SETUP_X+5, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "Saved.          ");
                         delay(1000);
-                        osd_print (MENU_SETUP_X-2, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "                ");
+                        osd_print (MENU_SETUP_X+5, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "                ");
                         
                         // wait key released
                         while(get_key() == KEY_UP);
@@ -1871,7 +1906,15 @@ void screen_manual(uint8_t mode, uint8_t channelIndex)
     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
     if(mode == 0)
     {    
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02       MANUAL            \x02");     
+        if (manual_mode== MODE_BAND)
+        {    
+            osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  MANUAL BAND MODE       \x02");     
+        }
+        else
+        {
+            osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  MANUAL LINEAR MODE     \x02");     
+        
+        }
     }
     else
     {    
