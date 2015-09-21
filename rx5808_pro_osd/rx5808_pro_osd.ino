@@ -157,6 +157,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define EEPROM_ADR_RSSI_MAX_L 4
 #define EEPROM_ADR_RSSI_MAX_H 5
 #define EEPROM_VIDEO_MODE 6
+#define EEPROM_MANUAL_MODE 6
 
 // Screen settings (use smaller NTSC size)
 #define SCEEEN_X_MAX 30
@@ -175,7 +176,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define MENU_SETUP_X 6
 #define MENU_SETUP_Y 2
 #define MENU_SETUP_HEADER 3
-#define MENU_SETUP_ENTRY 5
+#define MENU_SETUP_ENTRY 6
+#define MODE_LINEAR 0 // manual step works linar
+#define MODE_BAND 1   // manual step works on bands
 // band scanner gemetry
 #define BAND_SCANNER_SPECTRUM_X_MIN 2
 #define BAND_SCANNER_SPECTRUM_X_MAX 27
@@ -290,6 +293,7 @@ uint16_t rssi_seek_found=0;
 uint16_t rssi_setup_run=0;
 uint8_t menu_first_entry=0;
 uint8_t video_mode=PAL;
+uint8_t manual_mode=MODE_LINEAR;
 uint8_t menu_hide=0; // flag to hide osd
 uint16_t menu_hide_timer=MENU_HIDE_TIMER;
 uint8_t menu_no_hide=0;
@@ -384,6 +388,7 @@ void setup()
         EEPROM.write(EEPROM_ADR_RSSI_MAX_L,lowByte(RSSI_MAX_VAL));
         EEPROM.write(EEPROM_ADR_RSSI_MAX_H,highByte(RSSI_MAX_VAL));
         EEPROM.write(EEPROM_VIDEO_MODE,video_mode);
+        EEPROM.write(EEPROM_MANUAL_MODE,manual_mode);
     }
     // debug reset EEPROM
     //EEPROM.write(EEPROM_ADR_STATE,255);    
@@ -399,6 +404,7 @@ void setup()
     // rssi_max=300; //  expect no clipping (typical ~250)
     
     video_mode=EEPROM.read(EEPROM_VIDEO_MODE);
+    manual_mode=EEPROM.read(EEPROM_MANUAL_MODE);      
     force_menu_redraw=1;
  
     unplugSlaves();
@@ -890,16 +896,35 @@ void loop()
                         osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "                 ");
                         state=state_last_used;  // fast exit
                     break;
-                    case 2: // VIDEO MODE
+                    case 2: // MANUAL MODE
+                        // toggle and update
+                        if(manual_mode== MODE_LINEAR){
+                            manual_mode=MODE_BAND;  
+                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"BAND  ");                              
+                        }
+                        else
+                        {
+                            manual_mode=MODE_LINEAR;
+                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"LINEAR");       
+                        } 
+                        EEPROM.write(EEPROM_MANUAL_MODE,manual_mode);
+                        osd_print (MENU_SETUP_X-2, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "Saved.          ");
+                        delay(1000);
+                        osd_print (MENU_SETUP_X-2, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "                ");
+                        
+                        // wait key released
+                        while(get_key() == KEY_UP);
+                    break;
+                    case 3: // VIDEO MODE
                         // toggle and update
                         if(video_mode== NTSC){
                             video_mode=PAL;
-                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"PAL * ");                            
+                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+6,"PAL * ");                            
                         }
                         else
                         {
                             video_mode=NTSC;
-                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"NTSC *");       
+                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+6,"NTSC *");       
                         } 
                         EEPROM.write(EEPROM_VIDEO_MODE,video_mode);
                         osd_print (MENU_SETUP_X-2, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "* Saved, needs restart!");
@@ -907,11 +932,11 @@ void loop()
                         // wait key released
                         while(get_key() == KEY_UP);
                     break;
-                    case 3: // RSSI CALIBRATE
+                    case 4: // RSSI CALIBRATE
                         state=STATE_RSSI_SETUP;
                         spectrum_init();                          
                     break;
-                    case 4: // Font upload
+                    case 5: // Font upload
                         uploadFont();                        
                     break;                    
                 } // end switch                
@@ -1784,17 +1809,26 @@ void screen_setup(void)
     osd_print(MENU_SETUP_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
     osd_print(MENU_SETUP_X,y++,"\x02  EXIT           \x02");
     osd_print(MENU_SETUP_X,y++,"\x02  SAVE SETTINGS  \x02");
+    osd_print(MENU_SETUP_X,y++,"\x02  MANUAL:        \x02");
     osd_print(MENU_SETUP_X,y++,"\x02  VIDEO :        \x02");
     osd_print(MENU_SETUP_X,y++,"\x02  RSSI CALIBRATE \x02");
     osd_print(MENU_SETUP_X,y++,"\x02  FONT UPLOAD    \x02");
     osd_print(MENU_SETUP_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");   
-    // video mode handler
-    if(video_mode== NTSC){
-        osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"NTSC");
+    // manual mode handler
+    if(manual_mode== MODE_LINEAR){
+        osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"LINEAR");  
     }
     else
     {
-         osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"PAL ");       
+        osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"BAND  ");      
+    }    
+    // video mode handler
+    if(video_mode== NTSC){
+        osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+6,"NTSC");
+    }
+    else
+    {
+         osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+6,"PAL ");       
     }
 }
 
