@@ -102,7 +102,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 
 //#define POWER_SENSE A0 // difficult to solder
 #define POWER_SENSE A2 // easier to solder
-#define POWER_SCALE 14.75 // divider 1.5K 22K
+#define POWER_SCALE 15.5 // divider 1.5K 22K
 #define POWER_UPDATE_RATE 20 // how ofter power is updated (loops)
 
 #define spiDataPin 11
