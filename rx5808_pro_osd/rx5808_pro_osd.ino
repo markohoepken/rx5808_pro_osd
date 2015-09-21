@@ -302,6 +302,7 @@ uint8_t menu_no_hide=0;
 uint8_t osd_mode=0; // keep current osd mode for wakeup
 uint8_t power_update_delay=POWER_UPDATE_RATE;
 uint8_t channel_scan=0;
+uint8_t rssi_seek_threshold=RSSI_SEEK_TRESHOLD;
 
 uint8_t debug=0;
 
@@ -530,6 +531,7 @@ void loop()
                     // rssi setup
                     screen_band_scanner(1);                      
                     // prepare new setup
+
                     rssi_min=0;
                     rssi_max=400; // set to max range
                     rssi_setup_min=400;
@@ -606,7 +608,7 @@ void loop()
                     }
                     else
                     {
-                        channel_scan=0;
+                        channel_scan=CHANNEL_MIN_INDEX;
                     }
                     // translate to right index
                     channelIndex = channelList[channel_scan];                    
@@ -624,7 +626,7 @@ void loop()
                 }
                 else
                 { // linear mode
-                    if(channel_scan > 0)
+                    if(channel_scan > CHANNEL_MIN_INDEX)
                     {
                         channel_scan--;
                     }
@@ -653,7 +655,7 @@ void loop()
         { // SEEK MODE
             if(!seek_found) // search if not found
             {
-                if ((!force_seek) && (rssi > RSSI_SEEK_TRESHOLD)) // check for found channel
+                if ((!force_seek) && (rssi > rssi_seek_threshold)) // check for found channel
                 {
                     seek_found=1; 
                     menu_no_hide=0;  // found, screen may be turned off
@@ -693,16 +695,17 @@ void loop()
     {
         // background scan with key interruption
         spectrum_init();
-        uint8_t channel_index=0;        
+        uint8_t channel_index=0;   
+        uint8_t channel_scan_run=0;        
         uint8_t exit=0;
-        while(!exit &  channel_scan <= CHANNEL_MAX_INDEX)
+        while(!exit &  channel_scan_run <= CHANNEL_MAX_INDEX)
         //for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX;channel_scan++ )
         {
            // osd_print_debug(1,1,"CH:",channel_scan);
        // stay here until key pressed again
         //while(get_key() == KEY_NONE);
         //while(get_key() == KEY_DOWN);          
-            channel_index = channelList[channel_scan];            
+            channel_index = channelList[channel_scan_run];            
             setChannelModule(channel_index);   // TUNE 
             time_of_tune=millis();   
             // wait for rssi_ready an check keys
@@ -735,15 +738,15 @@ void loop()
             // save raw for channel marker + Filter
             if(rssi >RSSI_SCANNER_FOUND)
             {
-                spectrum_channel_value[channel_scan]=rssi;
+                spectrum_channel_value[channel_scan_run]=rssi;
             }
             else
             {
-                spectrum_channel_value[channel_scan]=0;
+                spectrum_channel_value[channel_scan_run]=0;
             }
             // add spectrum of current channel
             spectrum_add_column (6, pgm_read_word_near(channelFreqTable + channel_index), rssi,0);     
-            channel_scan++;
+            channel_scan_run++;
         }
         spectrum_dump(6);  
         // analyse spectrum an mark potential channels
@@ -1209,8 +1212,9 @@ void SERIAL_ENABLE_HIGH()
 void background_scan(uint8_t size)
 {
     spectrum_init();
-    uint8_t channel_scan;
+    uint8_t channel_scan=0;
     uint8_t channel_index;
+    uint8_t current_rssi_max=0; // set seek values
     for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX;channel_scan++ )
     {
        // osd_print_debug(1,1,"CH:",channel_scan);
@@ -1219,9 +1223,14 @@ void background_scan(uint8_t size)
         time_of_tune=millis();                
         wait_rssi_ready();
         rssi = readRSSI();
+        if(rssi>current_rssi_max){
+            current_rssi_max=rssi;
+        }
         // add spectrum of current channel
         spectrum_add_column (size, pgm_read_word_near(channelFreqTable + channel_index), rssi,0);                
     }
+    // set new seek threshold
+    rssi_seek_threshold=(uint16_t)current_rssi_max*RSSI_SEEK_TRESHOLD/100;
 }
   
 
@@ -1276,7 +1285,8 @@ void draw_rssi_bar(uint8_t xpos, uint8_t ypos, uint8_t scale, uint8_t rssi)
                 // handle fractional values on top of bar and beyond
                 uint8_t rssi_fraction= rssi-(x_max_100*x_step);
                 uint8_t bar_value= rssi_fraction/ x_step_fractional;
-                osd_print_char(xpos+x,ypos,0x84+bar_value); // fractional bars
+//                osd_print_char(xpos+x,ypos,0x84+bar_value); // fractional bars
+                osd_print_char(xpos+x,ypos,0x83+bar_value); // fractional bars
                 x_fill=1; // fill rest with "0"
             }
             else
@@ -1715,7 +1725,7 @@ char spectrum_get_char(uint8_t value)
 void dump_channels(uint8_t y_pos)
 {
     // dumps potential channels by hill climb anaysis.
-    uint8_t channel_scan;
+    uint8_t channel_scan=0;
     uint8_t last_value=0;
     uint8_t channel_index=0;
 //    char marker_string[]="                           "; // clear line
