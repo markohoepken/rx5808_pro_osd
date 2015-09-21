@@ -102,7 +102,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 
 //#define POWER_SENSE A0 // difficult to solder
 #define POWER_SENSE A2 // easier to solder
-#define POWER_SCALE 15.5 // divider 1.5K 22K
+#define POWER_SCALE 15.5 // divider 1.5K 22K, tweak to match correct voltage
 #define POWER_UPDATE_RATE 20 // how ofter power is updated (loops)
 
 #define spiDataPin 11
@@ -303,6 +303,7 @@ uint8_t osd_mode=0; // keep current osd mode for wakeup
 uint8_t power_update_delay=POWER_UPDATE_RATE;
 uint8_t channel_scan=0;
 uint8_t rssi_seek_threshold=RSSI_SEEK_TRESHOLD;
+uint8_t seek_up=0; // keep direction of seek
 
 uint8_t debug=0;
 
@@ -665,12 +666,24 @@ void loop()
                     force_seek=0;
                     menu_no_hide=1; // prevent hide on search
                     // next channel
-                    if (channel < CHANNEL_MAX) 
+                    if(seek_up)
+                    {                    
+                        if (channel < CHANNEL_MAX) 
+                        {
+                                channel++;
+                        } else {
+                            channel=CHANNEL_MIN;
+                        }      
+                    }
+                    else // seek down
                     {
-                        channel++;
-                    } else {
-                        channel=CHANNEL_MIN;
-                    }      
+                        if (channel > CHANNEL_MIN) 
+                        {
+                                channel--;
+                        } else {
+                            channel=CHANNEL_MAX;
+                        }                     
+                    }
                     channelIndex = channelList[channel];                      
                     screen_manual_data(channelIndex); // update data on screen
                 }        
@@ -682,9 +695,17 @@ void loop()
                 if (get_key() == KEY_UP) // restart seek if key pressed
                 {              
                     force_seek=1;
+                    seek_up=1;
                     seek_found=0; 
                     osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  AUTO MODE SEEK");      
-                }                
+                }             
+                else if (get_key() == KEY_DOWN) // restart seek if key pressed
+                {              
+                    force_seek=1;
+                    seek_up=0;
+                    seek_found=0; 
+                    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  AUTO MODE SEEK");      
+                }                 
             }
         }        
     }
