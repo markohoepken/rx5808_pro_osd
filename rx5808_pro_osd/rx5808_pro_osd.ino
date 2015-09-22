@@ -123,7 +123,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define RSSI_MIN_VAL 90
 #define RSSI_MAX_VAL 300
 // 75% threshold, when channel is printed in spectrum
-#define RSSI_SCANNER_FOUND 50 
+#define RSSI_SCANNER_FOUND 35 
 // 80% under max value for RSSI 
 #define RSSI_SEEK_TRESHOLD 80
 // scan loops for setup run
@@ -872,7 +872,7 @@ void loop()
                 switch (menu_id) 
                 {    
                     case 0: // EXIT
-                        state=STATE_SETUP;
+                        state=state_last_used;
                     break;
                     case 1: // AUTO SEARCH
                         state=STATE_SEEK;
