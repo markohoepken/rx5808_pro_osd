@@ -78,7 +78,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #include "ArduCam_Max7456.h"
 #include <EEPROM.h>
 #include "Spi.h"
-#include <MemoryFree.h>
+
 
 /* *************************************************/
 /* ***************** DEFINITIONS *******************/
