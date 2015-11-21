@@ -47,20 +47,23 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 /* **************** MAIN PROGRAM - MODULES ******************** */
 /* ************************************************************ */
 
+
+//#define membug 
+// AVR Includes
+#include <FastSerial.h> // better steam
+
+
 #undef PROGMEM 
 #define PROGMEM __attribute__(( section(".progmem.data") )) 
 
-#undef PSTR 
-#define PSTR(s) (__extension__({static prog_char __c[] PROGMEM = (s); &__c[0];})) 
+# undef PSTR
+# define PSTR(s) (__extension__({static prog_char __c[] PROGMEM = (s); (prog_char_t *)&__c[0];}))
+
+
 
 
 /* **********************************************/
 /* ***************** INCLUDES *******************/
-
-//#define membug 
-
-// AVR Includes
-#include <FastSerial.h> // better steam
 
 // Get the common arduino functions
 #if defined(ARDUINO) && ARDUINO >= 100
@@ -78,6 +81,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #include "ArduCam_Max7456.h"
 #include <EEPROM.h>
 #include "Spi.h"
+
 
 
 /* *************************************************/
@@ -149,15 +153,21 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #define CHANNEL_MAX 39
 #define CHANNEL_MIN 0
 
-
 #define EEPROM_ADR_STATE 0
 #define EEPROM_ADR_TUNE 1
 #define EEPROM_ADR_RSSI_MIN_L 2
 #define EEPROM_ADR_RSSI_MIN_H 3
 #define EEPROM_ADR_RSSI_MAX_L 4
 #define EEPROM_ADR_RSSI_MAX_H 5
-#define EEPROM_VIDEO_MODE 6
-#define EEPROM_MANUAL_MODE 7
+#define EEPROM_ADR_VIDEO_MODE 6
+#define EEPROM_ADR_MANUAL_MODE 7
+#define EEPROM_ADR_MAGIC_KEY 8
+#define EEPROM_MAGIC_KEY_SIZE 17
+const uint8_t MagicKey[] PROGMEM = { // key to check if EEprom matches software
+  'R','X','5','8','0','8','O','S','D',
+  'R','E','V','1','.','1','.','2'
+};
+
 
 // Screen settings (use smaller NTSC size)
 #define SCEEEN_X_MAX 30
@@ -326,7 +336,7 @@ uint8_t spectrum_display[BAND_SCANNER_SPECTRUM_X_MAX][6];
 
 // keeps rssi value for each column for fast statistic
 // Note to index: We have 40 channels, but NEED 41 places to store.
-// By this we can detect an bar at the right edge.
+// By this we can detect a bar at the right edge.
 uint8_t spectrum_channel_value[CHANNEL_MAX+2]={0}; 
 
 
@@ -336,6 +346,7 @@ uint8_t spectrum_channel_value[CHANNEL_MAX+2]={0};
 /**********************************************/
 void setup() 
 {
+
     // fill clonebar lookup with data
     // its easier to maintain in this manner instead of setting the array static
     // done by manual select the right entries
@@ -381,8 +392,18 @@ void setup()
     
 
    // use values only of EEprom is not 255 = unsaved
-    uint8_t eeprom_check = EEPROM.read(EEPROM_ADR_STATE);
-    if(eeprom_check == 255) // unused
+   // check if eeprom is matching current software
+   // the check is done by comparing magic key in eeprom
+   uint8_t eeprom_invalid=0;
+   for(int i=0; i<EEPROM_MAGIC_KEY_SIZE; i++)
+   {
+        if((uint8_t)EEPROM.read(EEPROM_ADR_MAGIC_KEY+i) != (uint8_t)pgm_read_word_near(MagicKey + i))
+        {
+            eeprom_invalid=1;
+            break;
+        }        
+   }
+    if(eeprom_invalid) // EEprom does not match current software, must store new defaults
     {
         EEPROM.write(EEPROM_ADR_STATE,START_STATE);
         EEPROM.write(EEPROM_ADR_TUNE,CHANNEL_MIN_INDEX);
@@ -392,11 +413,17 @@ void setup()
         // save 16 bit
         EEPROM.write(EEPROM_ADR_RSSI_MAX_L,lowByte(RSSI_MAX_VAL));
         EEPROM.write(EEPROM_ADR_RSSI_MAX_H,highByte(RSSI_MAX_VAL));
-        EEPROM.write(EEPROM_VIDEO_MODE,video_mode);
-        EEPROM.write(EEPROM_MANUAL_MODE,manual_mode);
+        EEPROM.write(EEPROM_ADR_VIDEO_MODE,video_mode);
+        EEPROM.write(EEPROM_ADR_MANUAL_MODE,manual_mode);
+        // store magic key for next check
+        for(int i=0; i<EEPROM_MAGIC_KEY_SIZE; i++)
+        {
+            EEPROM.write(EEPROM_ADR_MAGIC_KEY+i,pgm_read_word_near(MagicKey + i));
+        }         
     }
+
     // debug reset EEPROM
-    //EEPROM.write(EEPROM_ADR_STATE,255);    
+    //EEPROM.write(EEPROM_ADR_MAGIC_KEY,255);    
         
     // read last setting from eeprom
     state=EEPROM.read(EEPROM_ADR_STATE);
@@ -408,8 +435,8 @@ void setup()
     // rssi_min=5; // force bars in any case
     // rssi_max=300; //  expect no clipping (typical ~250)
     
-    video_mode=EEPROM.read(EEPROM_VIDEO_MODE);
-    manual_mode=EEPROM.read(EEPROM_MANUAL_MODE);      
+    video_mode=EEPROM.read(EEPROM_ADR_VIDEO_MODE);
+    manual_mode=EEPROM.read(EEPROM_ADR_MANUAL_MODE);      
     force_menu_redraw=1;
  
     unplugSlaves();
@@ -418,7 +445,6 @@ void setup()
     osd.init();
     osd.set_h_offset(OSD_H_OFFSET);
     osd.set_v_offset(OSD_V_OFFSET);
-    
     // set pins
     pinMode(rx5808_SEL,OUTPUT);
     digitalWrite(rx5808_SEL,HIGH);
@@ -435,14 +461,17 @@ void setup()
         delay(200);
     }
 #endif 
-    // setup spectrum screen array
-//    spectrum_init();
-    //screen_mode_selection();  
-//    screen_band_scanner(0);
 
+    // simple start screen
 
-    
-  
+    screen_startup();
+    // show message if EEPROM need reinit
+    if(eeprom_invalid)
+    {
+       osd_print(3,12,"INVALID EEPROM CLEARED");
+    }
+    delay(2000);
+
 
 } // END of setup();
 
@@ -950,7 +979,7 @@ void loop()
                     case 1: // SAVE SETTINGS
                         EEPROM.write(EEPROM_ADR_STATE,state_last_used);
                         EEPROM.write(EEPROM_ADR_TUNE,channelIndex);  
-                        EEPROM.write(EEPROM_VIDEO_MODE,video_mode);                        
+                        EEPROM.write(EEPROM_ADR_VIDEO_MODE,video_mode);                        
                         osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), " Settings saved..");
                         delay(1000);
                         osd_print (MENU_SETUP_X, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "                 ");
@@ -967,7 +996,7 @@ void loop()
                             manual_mode=MODE_LINEAR;
                             osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"LINEAR");       
                         } 
-                        EEPROM.write(EEPROM_MANUAL_MODE,manual_mode);
+                        EEPROM.write(EEPROM_ADR_MANUAL_MODE,manual_mode);
                         osd_print (MENU_SETUP_X+5, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "Saved.          ");
                         delay(1000);
                         osd_print (MENU_SETUP_X+5, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "                ");
@@ -986,7 +1015,7 @@ void loop()
                             video_mode=NTSC;
                             osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+6,"NTSC *");       
                         } 
-                        EEPROM.write(EEPROM_VIDEO_MODE,video_mode);
+                        EEPROM.write(EEPROM_ADR_VIDEO_MODE,video_mode);
                         osd_print (MENU_SETUP_X-2, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "* Saved, needs restart!");
                         delay(1000);
                         // wait key released
@@ -1063,7 +1092,6 @@ void spi_32_transfer(uint32_t value)
 // driver RX module with SPI hardmacro. NOT WORKING YES
 void setChannelModule__(uint8_t channel) 
 {
-  uint8_t i;
   uint16_t channelData;
   channelData = pgm_read_word_near(channelTable + channel);
   //osd_print_debug_x (10, 1, "CH", channelData);  
@@ -1288,7 +1316,6 @@ void draw_rssi_bar(uint8_t xpos, uint8_t ypos, uint8_t scale, uint8_t rssi)
     osd_print_debug(1,3,"x_step_fractional",x_step_fractional);
     //osd_print_debug(1,4,"xpos",x);    
 #endif  
-    uint8_t value=0;
   
     // left corner
     osd_print_char(xpos,ypos,0x83); // left
@@ -1338,7 +1365,7 @@ void show_power(uint8_t x, uint8_t y)
 {
     uint16_t sensorValue = analogRead(POWER_SENSE);
   // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 5V):    
-    float voltage = sensorValue * (5 / 1023.0) * POWER_SCALE;
+    double voltage = sensorValue * (5 / 1023.0) * POWER_SCALE;
     osd.setPanel(x-1,y-1);  
     osd.openPanel();
     osd.printf("%c%2.1f",0xd0,voltage); 
@@ -1388,7 +1415,7 @@ uint16_t readRSSI()
 }
       
    
-void osd_print (uint8_t x, uint8_t y, char string[30])
+void osd_print (uint8_t x, uint8_t y, const char string[30])
 {
     osd.setPanel(x-1,y-1);  
     osd.openPanel();
@@ -1403,21 +1430,21 @@ void osd_print_int (uint8_t x, uint8_t y, uint16_t value)
     osd.closePanel(); 
 }
 
-void osd_print_char (uint8_t x, uint8_t y, char value)
+void osd_print_char (uint8_t x, uint8_t y, const char value)
 {
     osd.setPanel(x-1,y-1);  
     osd.openPanel();
     osd.printf("%c",value); 
     osd.closePanel(); 
 }
-void osd_print_debug (uint8_t x, uint8_t y, char string[30], uint16_t value)
+void osd_print_debug (uint8_t x, uint8_t y, const char string[30], uint16_t value)
 {
     osd.setPanel(x-1,y-1);  
     osd.openPanel();
     osd.printf("%s :%i   ",string,value); 
     osd.closePanel(); 
 }
-void osd_print_debug_x (uint8_t x, uint8_t y, char string[30], uint16_t value)
+void osd_print_debug_x (uint8_t x, uint8_t y, const char string[30], uint16_t value)
 {
     osd.setPanel(x-1,y-1);  
     osd.openPanel();
@@ -1846,6 +1873,21 @@ void screen_manual_data(uint8_t channelIndex)
 ///////////////////////////////////////
 //  SCREENS
 ///////////////////////////////////////
+/*******************/
+/*  START SCREEN   */
+/*******************/
+void screen_startup(void)
+{
+    uint8_t y=MENU_MODE_SELECTION_Y;
+    osd.clear();
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02   RX5808 OSD   \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02   19.12.2015   \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02    V1.1.3      \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  MARKO HOEPKEN \x02");
+    osd_print(MENU_MODE_SELECTION_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+}
 
 
 /*******************/
@@ -2081,15 +2123,13 @@ uint8_t get_key_raw (void)
 
 void unplugSlaves(){
     //Unplug list of SPI
-
     digitalWrite(MAX7456_SELECT,  HIGH); // unplug OSD
 }
 
 void uploadFont()
-{
-    
+{ 
     uint16_t byte_count = 0;
-    byte bit_count;
+    byte bit_count=0;
     byte ascii_binary[0x08];
 
     // move these local to prevent ram usage
@@ -2097,20 +2137,26 @@ void uploadFont()
     int font_count = 0;
 
     osd.clear();
-    osd_print(2,3,"Waiting for Character Update");
-    osd_print(2,5,"  Reboot to skip update");
+    osd_print(2,3,"WAITING FOR CHARACTER UPDATE");
+    osd_print(2,5,"  REBOOT TO SKIP UPDATE");
     
     delay(1000);
 
     Serial.begin(TELEMETRY_SPEED);    
     Serial.println(""); // CR
-    Serial.println("Ready for Font upload");
+    Serial.println(""); // CR
+    Serial.println("READY FOR FRONT UPLOAD");
 
     while(font_count < 255) { 
         int8_t incomingByte = Serial.read();
         switch(incomingByte) // parse and decode mcm file
         {
         case 0x0d: // carridge return, end of line
+        // 2015/19/11 Marko Hoepken
+        // Note: Changed end of line detaction from 0xd to 0x0a to support unix and windows file style
+        // Window will have 0xd 0xa
+        // Unix   will have     0xa
+//        case 0x0a: // line feed, end of line
             //Serial.println("cr");
             if (bit_count == 8 && (ascii_binary[0] == 0x30 || ascii_binary[0] == 0x31))
             {
@@ -2152,6 +2198,7 @@ void uploadFont()
             else
                 bit_count = 0;
             break;
+//        case 0x0d: // carridge return, ignore
         case 0x0a: // line feed, ignore
             //Serial.println("ln");   
             break;
