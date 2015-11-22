@@ -308,7 +308,6 @@ OSD::write_NVM(int font_count, uint8_t *character_bitmap)
   
   // wait until bit 5 in the status register returns to 0 (12ms)
   while ((Spi.transfer(MAX7456_STAT_reg_read) & STATUS_reg_nvr_busy) != 0x00);
-
   Spi.transfer(MAX7456_VM0_reg); // turn on screen next vertical
   Spi.transfer(MAX7456_ENABLE_display_vert);
   digitalWrite(MAX7456_SELECT,HIGH);  

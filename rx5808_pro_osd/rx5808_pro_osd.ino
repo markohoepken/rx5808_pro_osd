@@ -48,35 +48,25 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 /* ************************************************************ */
 
 
-//#define membug 
+
 // AVR Includes
 #include <FastSerial.h> // better steam
-
-
-#undef PROGMEM 
-#define PROGMEM __attribute__(( section(".progmem.data") )) 
-
-# undef PSTR
-# define PSTR(s) (__extension__({static prog_char __c[] PROGMEM = (s); (prog_char_t *)&__c[0];}))
-
-
-
+#include <avr/pgmspace.h>  // Needed for PROGMEM stuff
 
 /* **********************************************/
 /* ***************** INCLUDES *******************/
 
 // Get the common arduino functions
 #if defined(ARDUINO) && ARDUINO >= 100
-#include "Arduino.h"
+  #include "Arduino.h"
 #else
-#include "wiring.h"
+  #include "wiring.h"
 #endif
 
+//#define membug 
 #ifdef membug
 #include <MemoryFree.h>
 #endif
-
-// Configurations
 
 #include "ArduCam_Max7456.h"
 #include <EEPROM.h>
@@ -91,7 +81,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 //#define ArduCAM328
 #define MinimOSD
 
-#define TELEMETRY_SPEED  57600  // Serial speed for key map update
+//#define TELEMETRY_SPEED  57600  // Serial speed for key map update
+#define TELEMETRY_SPEED  38400  // Serial speed for key map update
 
 // switches
 #define KEY_A 0 // RX
@@ -341,12 +332,17 @@ uint8_t spectrum_channel_value[CHANNEL_MAX+2]={0};
 
 
 
+
+
+
 /**********************************************/
 /*                   SETUP()                  */
 /**********************************************/
 void setup() 
 {
 
+//uploadFont();
+//while(1);
     // fill clonebar lookup with data
     // its easier to maintain in this manner instead of setting the array static
     // done by manual select the right entries
@@ -471,8 +467,6 @@ void setup()
        osd_print(3,12,"INVALID EEPROM CLEARED");
     }
     delay(2000);
-
-
 } // END of setup();
 
 
@@ -749,7 +743,7 @@ void loop()
         uint8_t channel_index=0;   
         uint8_t channel_scan_run=0;        
         uint8_t exit=0;
-        while(!exit &  channel_scan_run <= CHANNEL_MAX_INDEX)
+        while(!exit &  (channel_scan_run <= CHANNEL_MAX_INDEX))
         //for (channel_scan=CHANNEL_MIN_INDEX; channel_scan <= CHANNEL_MAX_INDEX;channel_scan++ )
         {
            // osd_print_debug(1,1,"CH:",channel_scan);
@@ -1008,25 +1002,27 @@ void loop()
                         // toggle and update
                         if(video_mode== NTSC){
                             video_mode=PAL;
-                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+6,"PAL * ");                            
+                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+6,"PAL ");                            
                         }
                         else
                         {
                             video_mode=NTSC;
-                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+6,"NTSC *");       
+                            osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+6,"NTSC");       
                         } 
                         EEPROM.write(EEPROM_ADR_VIDEO_MODE,video_mode);
-                        osd_print (MENU_SETUP_X-2, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "* Saved, needs restart!");
-                        delay(1000);
-                        // wait key released
-                        while(get_key() == KEY_UP);
+                        osd_print (MENU_SETUP_X-2, (MENU_SETUP_Y + 4 + MENU_SETUP_ENTRY ), "Saved. RESTARTING...");
+                        delay(2000);
+                        asm volatile ("  jmp 0");  // softstart by jumping to start vector  
+                        // REBOOT, WILL NEVER GET HERE
+
                     break;
                     case 4: // RSSI CALIBRATE
                         state=STATE_RSSI_SETUP;
                         spectrum_init();                          
                     break;
                     case 5: // Font upload
-                        uploadFont();                        
+                        uploadFont(); 
+                        // WILL REBOOT. WILL NEVER GET HERE
                     break;                    
                 } // end switch                
             }            
@@ -1420,6 +1416,16 @@ void osd_print (uint8_t x, uint8_t y, const char string[30])
     osd.setPanel(x-1,y-1);  
     osd.openPanel();
     osd.printf("%s",string); 
+    osd.closePanel(); 
+}
+// special print using PROGMEM strings
+void osd_print_P (uint8_t x, uint8_t y, const prog_char text[])
+{
+    char P_print_buffer[30];
+    strcpy_P(P_print_buffer,text); // copy PROGMEM string to local buffer
+    osd.setPanel(x-1,y-1);  
+    osd.openPanel();
+    osd.printf("%s",P_print_buffer); 
     osd.closePanel(); 
 }
 void osd_print_int (uint8_t x, uint8_t y, uint16_t value)
@@ -1876,53 +1882,86 @@ void screen_manual_data(uint8_t channelIndex)
 /*******************/
 /*  START SCREEN   */
 /*******************/
+
 void screen_startup(void)
 {
+    const static char P_text_1[] PROGMEM  ="\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04";
+    const static char P_text_2[] PROGMEM  ="\x02 RX5808 PRO OSD \x02";
+    const static char P_text_3[] PROGMEM  ="\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08";
+    const static char P_text_4[] PROGMEM  ="\x02   22.11.2015   \x02";
+    const static char P_text_5[] PROGMEM  ="\x02    V1.1.3      \x02";
+    const static char P_text_6[] PROGMEM  ="\x02  MARKO HOEPKEN \x02";
+    const static char P_text_7[] PROGMEM  ="\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06";
+
     uint8_t y=MENU_MODE_SELECTION_Y;
     osd.clear();
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02   RX5808 OSD   \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02   19.12.2015   \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02    V1.1.3      \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  MARKO HOEPKEN \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_1);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_2);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_3);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_4);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_5);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_6);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_7);   
+#ifdef membug    
+    osd_print_int (MENU_MODE_SELECTION_X,y++, freeMem()); 
+#endif
 }
-
 
 /*******************/
 /*   MODE SCREEN   */
 /*******************/
+
 void screen_mode_selection(void)
 {
+    const static char P_text_1[] PROGMEM  = "\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04";
+    const static char P_text_2[] PROGMEM  = "\x02 MODE SELECTION \x02";
+    const static char P_text_3[] PROGMEM  = "\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08";
+    const static char P_text_4[] PROGMEM  = "\x02  EXIT          \x02";
+    const static char P_text_5[] PROGMEM  = "\x02  AUTO SEARCH   \x02";
+    const static char P_text_6[] PROGMEM  = "\x02  BAND SCANNER  \x02";
+    const static char P_text_7[] PROGMEM  = "\x02  MANUEL MODE   \x02";
+    const static char P_text_8[] PROGMEM  = "\x02  SETUP         \x02";
+    const static char P_text_9[] PROGMEM  = "\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06";
+
     uint8_t y=MENU_MODE_SELECTION_Y;
-    osd.clear();
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02 MODE SELECTION \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  EXIT          \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  AUTO SEARCH   \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  BAND SCANNER  \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  MANUEL MODE   \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x02  SETUP         \x02");
-    osd_print(MENU_MODE_SELECTION_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+    osd.clear();       
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_1);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_2);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_3);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_4);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_5);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_6);    
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_7);
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_8);
+    osd_print_P(MENU_MODE_SELECTION_X,y++,P_text_9);
 }
 
 // Setup screen
 void screen_setup(void)
 {
+    const static char P_text_1[] PROGMEM  = "\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04";
+    const static char P_text_2[] PROGMEM  = "\x02       SETUP     \x02";
+    const static char P_text_3[] PROGMEM  = "\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08";
+    const static char P_text_4[] PROGMEM  = "\x02  EXIT           \x02";
+    const static char P_text_5[] PROGMEM  = "\x02  SAVE SETTINGS  \x02";
+    const static char P_text_6[] PROGMEM  = "\x02  MANUAL:        \x02";
+    const static char P_text_7[] PROGMEM  = "\x02  VIDEO :        \x02";
+    const static char P_text_8[] PROGMEM  = "\x02  RSSI CALIBRATE \x02";
+    const static char P_text_9[] PROGMEM  = "\x02  FONT UPLOAD    \x02";
+    const static char P_text_10[] PROGMEM  ="\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06";   
     uint8_t y=MENU_SETUP_Y;
     osd.clear();
-    osd_print(MENU_SETUP_X,y++,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
-    osd_print(MENU_SETUP_X,y++,"\x02       SETUP     \x02");
-    osd_print(MENU_SETUP_X,y++,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
-    osd_print(MENU_SETUP_X,y++,"\x02  EXIT           \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  SAVE SETTINGS  \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  MANUAL:        \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  VIDEO :        \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  RSSI CALIBRATE \x02");
-    osd_print(MENU_SETUP_X,y++,"\x02  FONT UPLOAD    \x02");
-    osd_print(MENU_SETUP_X,y++,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");   
+    osd_print_P(MENU_SETUP_X,y++,P_text_1);    
+    osd_print_P(MENU_SETUP_X,y++,P_text_2);    
+    osd_print_P(MENU_SETUP_X,y++,P_text_3);    
+    osd_print_P(MENU_SETUP_X,y++,P_text_4);    
+    osd_print_P(MENU_SETUP_X,y++,P_text_5);    
+    osd_print_P(MENU_SETUP_X,y++,P_text_6);    
+    osd_print_P(MENU_SETUP_X,y++,P_text_7);
+    osd_print_P(MENU_SETUP_X,y++,P_text_8);
+    osd_print_P(MENU_SETUP_X,y++,P_text_9);
+    osd_print_P(MENU_SETUP_X,y++,P_text_10);
+    
     // manual mode handler
     if(manual_mode== MODE_LINEAR){
         osd_print(MENU_SETUP_X+11,MENU_SETUP_Y+5,"LINEAR");  
@@ -1945,23 +1984,31 @@ void screen_setup(void)
 // Band scanner screen
 void screen_band_scanner(uint8_t mode)
 {
+    const static char P_text_1[] PROGMEM  = "\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04";
+    const static char P_text_2[] PROGMEM  = "\x02     BAND SCANNER   \xd0 0.0\x02";
+    const static char P_text_3[] PROGMEM  = "\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06";
+    const static char P_text_4[] PROGMEM  = "\x02  RSSI CALIBRATION       \x02";
+    const static char P_text_5[] PROGMEM  = "\x02Run:?? MIN:???   MAX:??? \x02";
+    const static char P_text_6[] PROGMEM  = "\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06";
+    const static char P_text_7[] PROGMEM  = "\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d";
+
     //  mode
     // 0 : scanner
     // 1 : RSSI calibration
     osd.clear();
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,1,P_text_1);      
     if(mode==0)
     {
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02     BAND SCANNER   \xd0 0.0\x02");    
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
+        osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,2,P_text_2);  
+        osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,3,P_text_3);     
     }
     else
     {
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  RSSI CALIBRATION       \x02");        
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x02Run:?? MIN:???   MAX:??? \x02");        
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
-        }
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");    
+        osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,2,P_text_4);  
+        osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,3,P_text_5);  
+        osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,4,P_text_6);      
+    }
+    osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,P_text_7);     
     spectrum_dump(6); 
     // add test to show that background scan runs
     osd_print(10,7,"Scanning.."); 
@@ -1971,38 +2018,46 @@ void screen_band_scanner(uint8_t mode)
 // Manual settings screen
 void screen_manual(uint8_t mode, uint8_t channelIndex)
 {
+    const static char P_text_1[] PROGMEM  = "\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04";
+    const static char P_text_2[] PROGMEM  = "\x02  MANUAL BAND MODE       \x02";
+    const static char P_text_3[] PROGMEM  = "\x02  MANUAL LINEAR MODE     \x02";
+    const static char P_text_4[] PROGMEM  = "\x02  AUTO MODE SEEK         \x02";
+    const static char P_text_5[] PROGMEM  = "\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08";
+    const static char P_text_6[] PROGMEM  = "\x02 FREQ: ???? GHz          \x02";
+    const static char P_text_7[] PROGMEM  = "\x02 RSSI:\x83\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x89\x02";
+    const static char P_text_8[] PROGMEM  = "\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06";
+    const static char P_text_9[] PROGMEM  = "\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d";
 
     // mode
     // 0: manual
     // 1: seek
     osd.clear();
     // static default text
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,1,"\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x04");
+    osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,1,P_text_1);     
     if(mode == 0)
     {    
         if (manual_mode== MODE_BAND)
         {    
-            osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  MANUAL BAND MODE       \x02");     
+            osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,2,P_text_2);  
         }
         else
         {
-            osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  MANUAL LINEAR MODE     \x02");     
-        
+            osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,2,P_text_3);                
         }
     }
     else
     {    
-        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,2,"\x02  AUTO MODE SEEK         \x02");   
+        osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,2,P_text_4);       
     }    
-    show_power(23,2);   
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,3,"\x07\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x08");
+    show_power(23,2); 
+    osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,3,P_text_5);           
     // CHAN comes from update function
     //    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,5,"\x02 FREQ: ???? GHz          \x02");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,6,"\x02 RSSI:\x83\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x89\x02");    
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,7,"\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06");
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,"\x09\x0d\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0a\x0c\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0b\x0d");        
-
+    osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,5,P_text_6);     
+    osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,6,P_text_7); 
+    osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,7,P_text_8); 
+    osd_print_P(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX-2,P_text_9); 
+    
     // fill in data
     screen_manual_data(channelIndex);
     // init spectrum    
@@ -2128,6 +2183,12 @@ void unplugSlaves(){
 
 void uploadFont()
 { 
+    const static char P_text_1[] PROGMEM  = "WAITING FOR CHARACTER UPDATE";
+    const static char P_text_2[] PROGMEM  = " PLESE SEND CHARACTERS WITH";
+    const static char P_text_3[] PROGMEM  = "   38400 BAUD VIA TERMNAL";
+    const static char P_text_4[] PROGMEM  = "SYSTEM WILL REBOOT WHEN DONE";   
+    const static char P_text_5[] PROGMEM  = " SKIP UPDATE BY RESTARTING";
+
     uint16_t byte_count = 0;
     byte bit_count=0;
     byte ascii_binary[0x08];
@@ -2135,28 +2196,24 @@ void uploadFont()
     // move these local to prevent ram usage
     uint8_t character_bitmap[0x40];
     int font_count = 0;
-
     osd.clear();
-    osd_print(2,3,"WAITING FOR CHARACTER UPDATE");
-    osd_print(2,5,"  REBOOT TO SKIP UPDATE");
-    
-    delay(1000);
-
+    osd_print_P(1,2,P_text_1);     
+    osd_print_P(1,5,P_text_2); 
+    osd_print_P(1,6,P_text_3); 
+    osd_print_P(1,8,P_text_4); 
+    osd_print_P(1,11,P_text_5); 
+    // enable UART for update
     Serial.begin(TELEMETRY_SPEED);    
-    Serial.println(""); // CR
-    Serial.println(""); // CR
-    Serial.println("READY FOR FRONT UPLOAD");
+    Serial.printf_P(PSTR("\n\nReady for font upload. Please send *.mcm file.\n\n"));            
+    Serial.printf_P(PSTR("You will get a message for each character stored.\n"));            
+    Serial.printf_P(PSTR("System will reboot when all 255 characters are stored.\n"));      
+    Serial.printf_P(PSTR("\nTo skip the update, just restart the system.\n"));      
 
     while(font_count < 255) { 
         int8_t incomingByte = Serial.read();
         switch(incomingByte) // parse and decode mcm file
         {
         case 0x0d: // carridge return, end of line
-        // 2015/19/11 Marko Hoepken
-        // Note: Changed end of line detaction from 0xd to 0x0a to support unix and windows file style
-        // Window will have 0xd 0xa
-        // Unix   will have     0xa
-//        case 0x0a: // line feed, end of line
             //Serial.println("cr");
             if (bit_count == 8 && (ascii_binary[0] == 0x30 || ascii_binary[0] == 0x31))
             {
@@ -2198,7 +2255,6 @@ void uploadFont()
             else
                 bit_count = 0;
             break;
-//        case 0x0d: // carridge return, ignore
         case 0x0a: // line feed, ignore
             //Serial.println("ln");   
             break;
@@ -2218,16 +2274,15 @@ void uploadFont()
             osd.write_NVM(font_count, character_bitmap);    
             byte_count = 0;
             font_count++;
-//            Serial.printf_P(PSTR("Char Done\n"));
             Serial.print(font_count, DEC);
-            Serial.println(" chars done");
+            Serial.println(" chars done");            
         }
     }
-    Serial.println("Font update done, please reboot.");
-    while(1); // wait ENDLESS
+    Serial.printf_P(PSTR("Font update done. Restarting system..\n\n"));      
+    delay(2000);
+    asm volatile ("  jmp 0");  // softstart by jumping to start vector   
+    // REBOOT, WILL NEVER GET HERE
 
-    //  character_bitmap[]
 }
-
 
 
