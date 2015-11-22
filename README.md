@@ -1,4 +1,7 @@
 # rx5808_pro_osd
+
+MAJOR FIXES in 1.1.3 FIXED FONT UPDATE.
+
 Deluxe OSD 5.8GHz (rx5808 module) control based on minimOSD Ardunino board
 
 This project is a Arduino controller for the Boscam RX5808 FPV receiver.
