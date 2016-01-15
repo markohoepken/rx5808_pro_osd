@@ -1845,22 +1845,22 @@ void spectrum_dump (uint8_t height)
 
 void screen_manual_data(uint8_t channelIndex)
 {
-    // clear last line
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,4,"\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02");
-    // set correct values by replace some characters (simple code)
+    // Initial string
+    uint8_t chan_str[32] = "\x02 CHAN: ?  \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17\x02";
     // BAND
-    osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+8,4,pgm_read_byte_near(bandNames + channelIndex));  
+    chan_str[8] = pgm_read_byte_near(bandNames + channelIndex);
     // ACTIVE CHANNEL
     uint8_t active_channel = channelIndex%CHANNEL_BAND_SIZE; // get channel inside band
     char active=0x18 + active_channel;
-    osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+11+(2*active_channel),4,active);  
+    chan_str[11 + 2*active_channel] = active;
+    //Print whole string
+    osd_print(BAND_SCANNER_SPECTRUM_X_MIN, 4, (const char*)chan_str);
     // FREQUENCY
     osd_print_int(BAND_SCANNER_SPECTRUM_X_MIN+8,5,pgm_read_word_near(channelFreqTable + channelIndex));
     // add marker for all channel per active band
     // set available channels marker
-    // clear symbol line
-    osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX,"                              ");
     uint8_t loop=0;
+    for(loop=0;loop<32;loop++) chan_str[loop] = 0x20;     // clear symbol line
     for(loop=0;loop<8;loop++)
     {
         uint8_t band_number=pgm_read_byte_near(bandNumber + channelIndex);
@@ -1871,9 +1871,10 @@ void screen_manual_data(uint8_t channelIndex)
         uint16_t frequency_per_char=((BAND_SCANNER_FREQ_MAX-BAND_SCANNER_FREQ_MIN)*INTEGER_GAIN)/((BAND_SCANNER_SPECTRUM_X_MAX-1)*2);
         uint8_t x_pos_54= (frequency_delta*(INTEGER_GAIN+ROUND_CORRECTION)) / frequency_per_char;
         uint8_t x=((x_pos_54)/2); // final down scale to single character
-        // print marker
-        osd_print_char(BAND_SCANNER_SPECTRUM_X_MIN+x,SCREEN_Y_MAX,pgm_read_byte_near(channelSymbol + channel));
+        chan_str[x] = pgm_read_byte_near(channelSymbol + channel);
     }
+    //Print complete string with everything
+        osd_print(BAND_SCANNER_SPECTRUM_X_MIN,SCREEN_Y_MAX, (const char*)chan_str);
 }
 
 ///////////////////////////////////////
@@ -1919,7 +1920,7 @@ void screen_mode_selection(void)
     const static char P_text_4[] PROGMEM  = "\x02  EXIT          \x02";
     const static char P_text_5[] PROGMEM  = "\x02  AUTO SEARCH   \x02";
     const static char P_text_6[] PROGMEM  = "\x02  BAND SCANNER  \x02";
-    const static char P_text_7[] PROGMEM  = "\x02  MANUEL MODE   \x02";
+    const static char P_text_7[] PROGMEM  = "\x02  MANUAL MODE   \x02";
     const static char P_text_8[] PROGMEM  = "\x02  SETUP         \x02";
     const static char P_text_9[] PROGMEM  = "\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06";
 
