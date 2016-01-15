@@ -1922,7 +1922,7 @@ void screen_mode_selection(void)
     const static char P_text_4[] PROGMEM  = "\x02  EXIT          \x02";
     const static char P_text_5[] PROGMEM  = "\x02  AUTO SEARCH   \x02";
     const static char P_text_6[] PROGMEM  = "\x02  BAND SCANNER  \x02";
-    const static char P_text_7[] PROGMEM  = "\x02  MANUEL MODE   \x02";
+    const static char P_text_7[] PROGMEM  = "\x02  MANUAL MODE   \x02";
     const static char P_text_8[] PROGMEM  = "\x02  SETUP         \x02";
     const static char P_text_9[] PROGMEM  = "\x05\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x06";
 
