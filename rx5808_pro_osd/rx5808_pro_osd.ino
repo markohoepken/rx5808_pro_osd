@@ -1417,7 +1417,7 @@ void osd_print (uint8_t x, uint8_t y, const char string[30])
     osd.closePanel(); 
 }
 // special print using PROGMEM strings
-void osd_print_P (uint8_t x, uint8_t y, const prog_char text[])
+void osd_print_P (uint8_t x, uint8_t y, const char* text)
 {
     char P_print_buffer[30];
     strcpy_P(P_print_buffer,text); // copy PROGMEM string to local buffer
