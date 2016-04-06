@@ -2,6 +2,7 @@
 #ifndef ArduCam_Max7456_h
 #define ArduCam_Max7456_h
 
+#include <BetterStream.h>
 /******* FROM DATASHEET *******/
 
 #define MAX7456_SELECT 6//SS

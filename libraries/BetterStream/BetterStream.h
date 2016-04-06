@@ -13,7 +13,6 @@
 
 #include <Stream.h>
 #include <avr/pgmspace.h>
-#include "../AP_Common/AP_Common.h"
 
 class BetterStream : public Stream {
 public:
@@ -21,16 +20,16 @@ public:
         }
 
         // Stream extensions
-        void            print_P(const prog_char_t *);
-        void            println_P(const prog_char_t *);
+        void            print_P(const char *);
+        void            println_P(const char *);
         void            printf(const char *, ...)
                 __attribute__ ((format(__printf__, 2, 3)));
-        void            _printf_P(const prog_char *, ...);
+        void            _printf_P(const char *, ...);
                 __attribute__ ((format(__printf__, 2, 3)));
 
         virtual int     txspace(void);
 
-#define printf_P(fmt, ...) _printf_P((const prog_char *)fmt, ## __VA_ARGS__)
+#define printf_P(fmt, ...) _printf_P((const char *)fmt, ## __VA_ARGS__)
 
 private:
         void            _vprintf(unsigned char, const char *, va_list)
@@ -38,4 +37,3 @@ private:
 };
 
 #endif // __BETTERSTREAM_H
-

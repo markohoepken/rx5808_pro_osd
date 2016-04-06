@@ -1,5 +1,5 @@
 
-#include <FastSerial.h>
+#include <avr/pgmspace.h>  // Needed for PROGMEM stuff
 //#include "BetterStream.h"
 
 #include "ArduCam_Max7456.h"
