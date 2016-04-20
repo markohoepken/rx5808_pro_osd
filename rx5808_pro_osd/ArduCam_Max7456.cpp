@@ -239,7 +239,7 @@ OSD::control(uint8_t ctrl){
   Spi.transfer(MAX7456_VM0_reg);
   switch(ctrl){
     case 0: // OSD off
-      Spi.transfer(MAX7456_DISABLE_display | video_mode);
+      Spi.transfer(MAX7456_DISABLE_display | video_mode | MAX7456_SYNC_external);
       break;
     case 1:  // OSD on with autosync 
       //Spi.transfer((MAX7456_ENABLE_display_vert | video_mode) | MAX7456_SYNC_internal);
