@@ -50,7 +50,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 
 
 // AVR Includes
-#include <FastSerial.h> // better steam
 #include <avr/pgmspace.h>  // Needed for PROGMEM stuff
 
 /* **********************************************/
@@ -207,7 +206,6 @@ const uint8_t MagicKey[] PROGMEM = { // key to check if EEprom matches software
 
 
 // Objects and Serial definitions
-FastSerialPort0(Serial); // just for character update
 OSD osd; //OSD object 
 
 // global variables
@@ -1419,7 +1417,7 @@ void osd_print (uint8_t x, uint8_t y, const char string[30])
     osd.closePanel(); 
 }
 // special print using PROGMEM strings
-void osd_print_P (uint8_t x, uint8_t y, const prog_char text[])
+void osd_print_P (uint8_t x, uint8_t y, const char* text)
 {
     char P_print_buffer[30];
     strcpy_P(P_print_buffer,text); // copy PROGMEM string to local buffer
@@ -2204,10 +2202,10 @@ void uploadFont()
     osd_print_P(1,11,P_text_5); 
     // enable UART for update
     Serial.begin(TELEMETRY_SPEED);    
-    Serial.printf_P(PSTR("\n\nReady for font upload. Please send *.mcm file.\n\n"));            
-    Serial.printf_P(PSTR("You will get a message for each character stored.\n"));            
-    Serial.printf_P(PSTR("System will reboot when all 255 characters are stored.\n"));      
-    Serial.printf_P(PSTR("\nTo skip the update, just restart the system.\n"));      
+    Serial.print(F("\n\nReady for font upload. Please send *.mcm file.\n\n"));            
+    Serial.print(F("You will get a message for each character stored.\n"));            
+    Serial.print(F("System will reboot when all 255 characters are stored.\n"));      
+    Serial.print(F("\nTo skip the update, just restart the system.\n"));      
 
     while(font_count < 255) { 
         int8_t incomingByte = Serial.read();
@@ -2278,11 +2276,10 @@ void uploadFont()
             Serial.println(" chars done");            
         }
     }
-    Serial.printf_P(PSTR("Font update done. Restarting system..\n\n"));      
+    Serial.print(F("Font update done. Restarting system..\n\n"));      
     delay(2000);
     asm volatile ("  jmp 0");  // softstart by jumping to start vector   
     // REBOOT, WILL NEVER GET HERE
-
 }
 
 
